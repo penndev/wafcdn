@@ -1,4 +1,4 @@
-local a = 1
+local common = require("common")
 
 local function handleDownload(premature, file,filepath, uri, params)
     file:seek("set")
@@ -7,14 +7,14 @@ local function handleDownload(premature, file,filepath, uri, params)
     file:write(res.body)
     httpc:close()
     file:close()
-    require("common").set_cache(filepath..".header")
+    common.setcache(filepath)
 end
 
 
 if ngx.ctx.docache and ngx.ctx.docachefile then
     if ngx.ctx.docachefinish then
         ngx.ctx.docachefile:close()
-        require("common").set_cache(ngx.ctx.cache_path..".header")
+        common.setcache(ngx.ctx.cache_path)
     else
         local ok, err = ngx.timer.at(
             0, 

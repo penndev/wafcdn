@@ -9,7 +9,9 @@
 
 -- 缓存
 
-local config = require("common").hostinfo(ngx.var.host)
+local common = require("common")
+
+local config = common.hostinfo(ngx.var.host)
 -- !!这里验证config
 
 -- 判断是否有缓存规则
@@ -26,17 +28,15 @@ if ngx.var.request_method == "GET" then
         end
     end
 
-    -- 验证是否已经存在缓存。和是否过期。
+    -- 验证文件缓存，超过一天的内容则文件缓存。
     if cache_hit == 1 and cache_time > 0 then
-
-        local file_path = ngx.md5(ngx.var.uri)
+        local file_path = config.dir .. common.md5path(ngx.var.uri)
         local cache_path = ngx.var.cache_path .. file_path
-        local savetime = require("common").get_cache(cache_path..".header")
-        if savetime and (savetime + (cache_time * 60)) >= os.time() then
+        if common.getcache(cache_path, cache_time) then
             ngx.req.set_uri("/@cached/"..file_path, true)
             return
         end
-        -- 才缓存行为加锁
+        -- 给缓存行为加锁
         local success, err, forcible = ngx.shared.docache:add(cache_path, true, 300)
         if forcible then
             ngx.log(ngx.ERR, "ngx.shared.docache no memory")
