@@ -1,35 +1,8 @@
 -- 公共方法模块
-local ffi = require("ffi")
-ffi.cdef([[
-    int mkdir(const char *path, int mode);
-    extern int errno;
-]])
-
 local resty_lock = require("resty.lock")
-
+local lfs = require("lfs")
 local M = {}
 
-function  M.mkdir(path, mode)
-    -- local path = path:match("(.*/)") or path
-    local res = ffi.C.mkdir(path, mode)
-    local err = ffi.errno()
-    if res == 0 then
-        return true
-    elseif err == 17 then -- 文件已存在。
-        return true
-    elseif err == 2 then -- 父级不存在
-        local parent = path:gsub("/[^/]+/$", "/")
-        if M.mkdir(parent,mode) then 
-            -- 再次尝试本地创建
-            return ffi.C.mkdir(path, mode) == 0
-        else
-            return false
-        end
-    else
-        ngx.log(ngx.ERR,"Create Folder Fial: mkdri errno("..err..")" .. path)
-        return false
-    end
-end
 
 -- 获取域名的配置信息
 -- host 请求的域名
@@ -88,29 +61,50 @@ function M.md5path(uri)
     return string.format("/%s/%s/%s", dir1, dir2, md5)
 end
 
--- 缓存成功
-function M.setcache(path)
-    -- local file, err = io.open(path, "w")
-    -- if file ~= nil then
-    --     file:write(os.time())
-    --     file:close()
-    -- end
-end
-
 -- 验证缓存是否过期
 -- path 文件路径
 -- expired 缓存时间/天
 -- return boolean
 function M.getcache(path, expired)
-    -- local file, err = io.open(path, "r")
-    -- if file then
-    --     local timestamp_str = file:read("*all")
-    --     file:close()
-    --     local timestamp = tonumber(timestamp_str)
-    return os.time
-    -- else
-    --     return nil
-    -- end
+    local modification, err  = lfs.attributes(path, "modification")
+    if modification then
+        local expired_time = expired * 60 + modification
+        if expired_time > os.time() then
+            return true
+        end
+    end
+    return false
 end
 
+-- 给缓存加锁
+function M.docachelock(path,expired)
+    local success, err, forcible = ngx.shared.docache:add(path, true, expired)
+    if forcible then
+        ngx.log(ngx.ERR, "ngx.shared.docache no memory")
+    end
+    if err and err ~= "exists" then
+        ngx.log(ngx.ERR, "ngx.shared.docache", err)
+    end
+    return success
+end
+
+-- 缓存成功
+-- 调用端口处理缓存目录。
+function M.setcache(path)
+
+end
+
+-- 递归创建缓存目录
+function M.mkdir(path)
+    local res, err = lfs.mkdir(path)
+    if not res then
+        local parent = path:gsub("/[^/]+/$", "/")
+        if M.mkdir(parent) then
+            local res, err = lfs.mkdir(path)
+            if err ~= nil then ngx.log(ngx.ERR, "创建文件夹失败[".. path .. "]", err) end
+            return res
+        end
+    end
+    return res
+end
 return M

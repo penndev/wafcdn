@@ -1,20 +1,20 @@
--- 判断防御和缓存相关的逻辑
+local common = require("common")
 
--- 防御
+local config = common.hostinfo(ngx.var.host)
+if config == nil then
+    ngx.status = 403
+    ngx.say("Error: Cant get host info!")
+    return ngx.exit(403)
+end
+
+-- 处理防御防御
     -- URL Header鉴权 功能通过设置鉴权算法和鉴权key来对数据进行访问保护。
     -- Referer 开启防盗链白名单，黑名单。
     -- IP 白名单，黑名单。
     -- UA 白名单，黑名单。
     -- 请求限制(限速/QPS)
 
--- 缓存
-
-local common = require("common")
-
-local config = common.hostinfo(ngx.var.host)
--- !!这里验证config
-
--- 判断是否有缓存规则
+-- 处理请求缓存
 if ngx.var.request_method == "GET" then
     local cache_hit = 0 -- [0未命中缓存|1命中缓存规则|2命中缓存文件]
     local cache_time = 0
@@ -28,7 +28,6 @@ if ngx.var.request_method == "GET" then
         end
     end
 
-    -- 验证文件缓存，超过一天的内容则文件缓存。
     if cache_hit == 1 and cache_time > 0 then
         local file_path = config.dir .. common.md5path(ngx.var.uri)
         local cache_path = ngx.var.cache_path .. file_path
@@ -36,19 +35,11 @@ if ngx.var.request_method == "GET" then
             ngx.req.set_uri("/@cached/"..file_path, true)
             return
         end
-        -- 给缓存行为加锁
-        local success, err, forcible = ngx.shared.docache:add(cache_path, true, 300)
-        if forcible then
-            ngx.log(ngx.ERR, "ngx.shared.docache no memory")
-        end
-        if success then -- 明确告诉下一步必须缓存
+        if common.docachelock(cache_path, 300) then -- 给缓存行为加锁
             ngx.ctx.docache = true 
             ngx.ctx.cache_path = cache_path
-        elseif err ~= "exists" then
-            ngx.log(ngx.ERR, "ngx.shared.docache" .. err)
         end
     end
 end
-
 
 ngx.ctx.back = config.back

@@ -1,2 +1,1 @@
-
-ngx.header["Server"] = "cnd/cached";
+ngx.header["Server"] = "cnd/cached"
