@@ -3,7 +3,8 @@ package main
 import (
 	"net/http"
 
-	"gorm.io/driver/sqlite"
+	// "gorm.io/driver/sqlite" // 效率更高？
+	"github.com/glebarez/sqlite" // 更兼容
 	"gorm.io/gorm"
 )
 
@@ -30,7 +31,8 @@ func initData() {
 func initServe() {
 
 	http.HandleFunc("/cached", func(w http.ResponseWriter, r *http.Request) {
-		r.PostForm.Get("")
+		r.PostForm.Get("siteID")
+		r.PostForm.Get("siteID")
 	})
 
 	// 启动HTTP服务器并监听本地端口8080
@@ -42,6 +44,5 @@ func initServe() {
 
 func main() {
 	initData()
-	go initServe()
-
+	initServe()
 }
