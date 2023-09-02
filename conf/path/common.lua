@@ -29,7 +29,7 @@ function M.hostinfo(host)
     local configinfo = {
         dir = "127.0.0.1",
         back = {
-            url = "http://127.0.0.1", 
+            url = "http://192.168.7.11", 
             host = "www.baidu.com",
             header = {
                 { header_name = "X-MY-NAME", header_value = "penndev" },

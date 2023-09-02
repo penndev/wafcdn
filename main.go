@@ -1,48 +1,96 @@
 package main
 
 import (
+	"log"
 	"net/http"
+	"sync"
 
 	// "gorm.io/driver/sqlite" // 效率更高？
+	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite" // 更兼容
 	"gorm.io/gorm"
 )
 
-type Cache struct {
-	Path     string `gorm:"primaryKey;comment:文件存储路径"`
-	Size     int    `gorm:"comment:文件大小"`
-	SiteID   int    `gorm:"comment:所属网站"`
-	Accessed int64  `gorm:"comment:访问时间lru用"`
-	Expried  int64  `gorm:"comment:过期时间"`
+func main() {
+	initData()
+	initTask()
+	initServe()
 }
 
-var db *gorm.DB
-var err error
-
-func initData() {
-	// 创建数据库
-	db, err = gorm.Open(sqlite.Open(".data"), &gorm.Config{})
-	if err != nil {
-		panic("创建缓存数据库失败")
-	}
-	db.AutoMigrate(&Cache{})
-}
-
+// ================================================ 处理web交互
 func initServe() {
-
-	http.HandleFunc("/cached", func(w http.ResponseWriter, r *http.Request) {
-		r.PostForm.Get("siteID")
-		r.PostForm.Get("siteID")
+	route := gin.Default()
+	route.POST("/cached", func(c *gin.Context) {
+		cachedData := Cache{}
+		err := c.ShouldBindJSON(&cachedData)
+		if err == nil {
+			log.Println(err)
+			return
+		}
+		c.Status(200)
+		task.Insert(cachedData)
 	})
-
 	// 启动HTTP服务器并监听本地端口8080
-	err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe("127.0.0.1:8080", route)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func main() {
-	initData()
-	initServe()
+// ======================================== 插入缓存相关
+var task *Task
+
+var taskListLen int16 = 3
+
+type Task struct {
+	sync.Mutex
+	ListIndex int16
+	List      []Cache
+}
+
+func (t *Task) Insert(c Cache) {
+	task.Lock()
+	println(task.ListIndex, cap(task.List))
+	task.List[task.ListIndex] = c
+	task.ListIndex++
+	if task.ListIndex == taskListLen {
+		task.ListIndex = 0
+		tempData := task.List
+		go func() {
+			print("==>")
+			for _, item := range tempData {
+				print("<<")
+				print(item.Path)
+			}
+		}()
+	}
+	task.Unlock()
+}
+
+func initTask() {
+	task = &Task{
+		ListIndex: 0,
+		List:      make([]Cache, taskListLen),
+	}
+}
+
+// ========================================== 处理数据相关
+var db *gorm.DB
+
+type Cache struct {
+	SiteID   int    `gorm:"primaryKey;comment:请求网站" binding:"required"`
+	Path     string `gorm:"primaryKey;comment:请求路径" binding:"required"`
+	File     string `gorm:"comment:文件路径" binding:"required"`
+	Size     int    `gorm:"comment:文件大小" binding:"required"`
+	Accessed int64  `gorm:"comment:访问时间lru用" binding:"required"`
+	Expried  int64  `gorm:"comment:过期时间" binding:"required"`
+}
+
+func initData() {
+	var err error
+	db, err = gorm.Open(sqlite.Open(".db"), &gorm.Config{})
+	if err != nil {
+		panic("创建缓存数据库失败")
+	}
+	db.AutoMigrate(&Cache{})
 }
