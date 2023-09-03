@@ -27,7 +27,7 @@ function M.hostinfo(host)
     
     
     local configinfo = {
-        dir = "127.0.0.1",
+        id = "127.0.0.1",
         back = {
             url = "http://192.168.7.11", 
             host = "www.baidu.com",
@@ -90,7 +90,8 @@ end
 
 -- 缓存成功
 -- 调用端口处理缓存目录。
-function M.setcache(path)
+-- cacheData{site, url, path, size, expired}网站id,请求地址,文件路径,过期时间,
+function M.setcache(cacheData)
 
 end
 

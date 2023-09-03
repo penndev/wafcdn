@@ -10,8 +10,15 @@ local function handleDownload(premature, file,filepath, uri, params)
     common.setcache(filepath)
 end
 
-
 if ngx.ctx.docache and ngx.ctx.docachefile then
+    local cacheData = {
+        site = 1,
+        url = ngx.var.,
+        path = ngx.ctx.cache_path, 
+        size = 0, 
+        expired
+    }
+
     if ngx.ctx.docachefinish then
         ngx.ctx.docachefile:close()
         common.setcache(ngx.ctx.cache_path)
