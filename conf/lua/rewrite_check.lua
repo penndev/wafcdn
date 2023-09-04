@@ -1,6 +1,6 @@
 local common = require("common")
 
-local config = common.hostinfo(ngx.var.host)
+local config = common.hostinfo()
 if config == nil then
     ngx.status = 403
     ngx.say("Error: Cant get host info!")
@@ -29,8 +29,8 @@ if ngx.var.request_method == "GET" then
     end
 
     if cache_hit == 1 and cache_time > 0 then
-        local file_path = config.dir .. common.md5path(ngx.var.uri)
-        local cache_path = ngx.var.cache_path .. file_path
+        local file_path = config.identity .. common.md5path(ngx.var.uri)
+        local cache_path = ngx.var.cache_dir .. file_path
         if common.getcache(cache_path, cache_time) then
             ngx.req.set_uri("/@cached/"..file_path, true)
             return

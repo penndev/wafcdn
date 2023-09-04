@@ -2,7 +2,7 @@ local common = require("common")
 
 local function handleDownload(premature, file,filepath, uri, params)
     file:seek("set")
-    local httpc = require("resty.http").new()
+    local httpc = require("http").new()
     local res, err = httpc:request_uri(uri, params)
     file:write(res.body)
     httpc:close()
@@ -11,13 +11,13 @@ local function handleDownload(premature, file,filepath, uri, params)
 end
 
 if ngx.ctx.docache and ngx.ctx.docachefile then
-    local cacheData = {
-        site = 1,
-        url = ngx.var.,
-        path = ngx.ctx.cache_path, 
-        size = 0, 
-        expired
-    }
+    -- local cacheData = {
+    --     site = 1,
+    --     url = ngx.var.request_uri,
+    --     path = ngx.ctx.cache_path, 
+    --     size = 0, 
+    --     expired
+    -- }
 
     if ngx.ctx.docachefinish then
         ngx.ctx.docachefile:close()

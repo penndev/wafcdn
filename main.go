@@ -20,6 +20,27 @@ func main() {
 // ================================================ 处理web交互
 func initServe() {
 	route := gin.Default()
+	route.GET("/getdomaininfo", func(c *gin.Context) {
+		c.String(200, `{
+			"identity": "127.0.0.1",
+			"back": {
+				"url": "http://192.168.7.11",
+				"host": "www.baidu.com",
+				"header": [
+					{ "header_name": "X-MY-NAME", "header_value": "penndev" }
+				]
+			},
+			"cache": [
+				{ "cache_key": "^/cc", "cache_time": 2000 }
+			],
+			"limit": {
+				"status": 1,
+				"qps": 100,
+				"rate": 100
+			}
+		}
+		`)
+	})
 	route.POST("/cached", func(c *gin.Context) {
 		cachedData := Cache{}
 		err := c.ShouldBindJSON(&cachedData)

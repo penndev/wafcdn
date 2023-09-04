@@ -1,64 +1,58 @@
 -- 公共方法模块
-local resty_lock = require("resty.lock")
-local lfs = require("lfs")
 local M = {}
 
+local lfs = require("lfs")
+local http = require("http")
+local json = require("cjson")
+
+local getHttpHost = function(premature, rq)
+    local httpc = http.new()
+    local url = rq.url.."/getdomaininfo?host="..rq.host
+    local res, err = httpc:request_uri(url)
+    if err ~= nil then
+        ngx.log(ngx.ERR, "getHttpHost() request_uri error:[", err, "]("..url..")")
+        return
+    end
+    if res and res.status == 200 then
+        local success, err, forcible = ngx.shared.domain:set(rq.host, res.body, 30)
+        if err ~= nil then 
+            ngx.log(ngx.ERR, "getHttpHost() domain set error:[".. err.."]")
+        end
+        return doamininfo
+    else
+        ngx.log(ngx.ERR, "getHttpHost() request_uri bad:[".. res.status.."]", res.body)
+    end
+    return nil
+end
 
 -- 获取域名的配置信息
 -- host 请求的域名
 -- return 域名配置的信息
 function M.hostinfo(host)
-    -- 直接返回内容
-    local value, flags = ngx.shared.hostinfo:get(host)
-    if value ~= nil then
-        return value
+    local rq = { url = ngx.var.domain_url, host = ngx.var.host}
+    local value, flags, stale = ngx.shared.domain:get_stale(rq.host)
+    if value ~= nil then -- 存在则直接返回。
+        if stale then 
+            ngx.timer.at(0,getHttpHost,rq)
+        end
+        local doamininfo, err = json.decode(value)
+        if err ~= nil then
+            ngx.log(ngx.ERR, "hostinfo() cjson decode error:[", err, "(]"..rq.host..")")
+        end
+        return doamininfo
+    else 
+        local success, err, forcible = ngx.shared.domain_lock:add(rq.host.."_lock", true, 30)
+        if err and err ~= "exists" then -- 有异常情况。
+            ngx.log(ngx.ERR, "ngx.shared.domain_lock>>", err)
+        end
+        if forcible then
+            ngx.log(ngx.ERR, "ngx.shared.domain_lock no memory")
+        end
+        if success then
+            ngx.timer.at(0,getHttpHost,rq)
+        end
     end
-
-    -- 加锁防止并发
-    local locks, err = resty_lock:new("locks")
-    if not locks then
-        ngx.log(ngx.ERR, "无法创建锁: ", err)
-    end
-
-    local elapsed, err = locks:lock(host)
-    if not elapsed then
-        ngx.log(ngx.ERR, "无法获取锁: ", err)
-    end
-    
-    
-    local configinfo = {
-        id = "127.0.0.1",
-        back = {
-            url = "http://192.168.7.11", 
-            host = "www.baidu.com",
-            header = {
-                { header_name = "X-MY-NAME", header_value = "penndev" },
-            }
-        },
-        cache = {
-            { cache_key = "^/cc", cache_time = 2000 }
-        },
-        limit = {
-            status = 1,
-            qps = 100,
-            rate = 100
-        }
-    }
-    -- 添加到共享内存
-    ngx.shared.hostinfo:set(host, configinfo, 300)
-    -- 释放锁
-    local ok, err = locks:unlock()
-    if not ok then
-        ngx.log(ngx.ERR, "无法释放锁: ", err)
-    end
-
-    return configinfo
-end
-
-function M.md5path(uri)
-    local md5 = ngx.md5(uri)
-    local dir1, dir2 = md5:sub(1, 2), md5:sub(3, 4)
-    return string.format("/%s/%s/%s", dir1, dir2, md5)
+    return nil
 end
 
 -- 验证缓存是否过期
@@ -93,6 +87,14 @@ end
 -- cacheData{site, url, path, size, expired}网站id,请求地址,文件路径,过期时间,
 function M.setcache(cacheData)
 
+end
+
+
+-- 计算路径的md5路径
+function M.md5path(uri)
+    local md5 = ngx.md5(uri)
+    local dir1, dir2 = md5:sub(1, 2), md5:sub(3, 4)
+    return string.format("/%s/%s/%s", dir1, dir2, md5)
 end
 
 -- 递归创建缓存目录
