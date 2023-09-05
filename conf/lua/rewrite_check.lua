@@ -1,5 +1,6 @@
 local common = require("common")
 
+-- 获取域名配置
 local config = common.hostinfo()
 if config == nil then
     ngx.status = 403
@@ -15,31 +16,32 @@ end
     -- 请求限制(限速/QPS)
 
 -- 处理请求缓存
+
 if ngx.var.request_method == "GET" then
-    local cache_hit = 0 -- [0未命中缓存|1命中缓存规则|2命中缓存文件]
-    local cache_time = 0
+    local doCacheTime = 0  --缓存过期时间
     if config.cache ~= nil then
         for _, cache in ipairs(config.cache) do
             if string.match(ngx.var.uri, cache.cache_key) then
-                cache_hit = 1
-                cache_time = cache.cache_time
+                doCacheTime = cache.cache_time
                 break
             end
         end
     end
-
-    if cache_hit == 1 and cache_time > 0 then
-        local file_path = config.identity .. common.md5path(ngx.var.uri)
-        local cache_path = ngx.var.cache_dir .. file_path
-        if common.getcache(cache_path, cache_time) then
-            ngx.req.set_uri("/@cached/"..file_path, true)
+    if doCacheTime > 0 then --命中缓存规则
+        local filepath = config.identity .. common.md5path(ngx.var.uri)
+        local doCacheFilePath = ngx.var.cache_dir .. "/" .. filepath
+        if common.getcache(doCacheFilePath, doCacheTime) then
+            ngx.req.set_uri("/@cached/"..filepath, true)
             return
         end
-        if common.docachelock(cache_path, 300) then -- 给缓存行为加锁
+        if common.docachelock(doCacheFilePath, 30) then -- 给缓存行为加锁
             ngx.ctx.docache = true 
-            ngx.ctx.cache_path = cache_path
+            ngx.ctx.docachefilepath = doCacheFilePath
+            ngx.ctx.docachetime = doCacheTime
+            ngx.ctx.docacheidentity = config.identity
         end
     end
 end
 
+-- 处理回源
 ngx.ctx.back = config.back

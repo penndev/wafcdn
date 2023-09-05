@@ -1,10 +1,12 @@
 if ngx.ctx.docache then
     if ngx.status == 200 then 
-        local filepath = ngx.ctx.cache_path:match("(.*/)")
+        local filepath = ngx.ctx.docachefilepath:match("(.*/)")
         if require("common").mkdir(filepath) then -- 创建目录失败
-            local file, err = io.open(ngx.ctx.cache_path, "w")
+            local file, err = io.open(ngx.ctx.docachefilepath, "w")
             if err then 
                 ngx.log(ngx.ERR, err)
+                ngx.ctx.docache = false
+                return
             end
             ngx.ctx.docachefile = file
         else
@@ -14,7 +16,9 @@ if ngx.ctx.docache then
 end
 
 if ngx.ctx.docache then
+    print(11111111)
     ngx.header["Server"] = "cnd/docache"
 else
+    print(22222222)
     ngx.header["Server"] = "cnd/back"
 end

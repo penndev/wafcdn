@@ -1,4 +1,4 @@
--- 设置回源请求
+-- 设置回源请求 动态处理回源参数。
 if ngx.ctx.back ~= nil then
     ngx.var.backend_url = ngx.ctx.back.url
     ngx.var.backend_host = ngx.ctx.back.host

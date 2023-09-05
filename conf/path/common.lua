@@ -72,21 +72,55 @@ end
 
 -- 给缓存加锁
 function M.docachelock(path,expired)
-    local success, err, forcible = ngx.shared.docache:add(path, true, expired)
+    local success, err, forcible = ngx.shared.cache:add(path, true, expired)
     if forcible then
-        ngx.log(ngx.ERR, "ngx.shared.docache no memory")
+        ngx.log(ngx.ERR, "ngx.shared.cache no memory")
     end
     if err and err ~= "exists" then
-        ngx.log(ngx.ERR, "ngx.shared.docache", err)
+        ngx.log(ngx.ERR, "ngx.shared.cache", err)
     end
     return success
 end
 
+
+
+
+-- 重新缓存文件
+function M.redownload(premature, downData, cacheData)
+    local httpc = http.new()
+    local res, err = httpc:request_uri(downData.url, downData.params)
+    if res.status == 200 then
+        downData.file:seek("set")
+        file:write(res.body)
+        downData.file:close()
+        M.setcache(premature,cacheData)
+    else
+        os.remove(cacheData.path)
+    end
+    httpc:close()
+end
+
+
 -- 缓存成功
 -- 调用端口处理缓存目录。
 -- cacheData{site, url, path, size, expired}网站id,请求地址,文件路径,过期时间,
-function M.setcache(cacheData)
-
+function M.setcache(premature ,cacheData)
+    local httpc = http.new()
+    local res, err = httpc:request_uri(cacheData.url, {
+        method = "POST",
+        body = json.encode({
+            SiteID = cachedata.identity,
+            Path = cachedata.uri,
+            File = cachedata.path,
+            Size = cachedata.size,
+            Accessed = os.time(),
+            Expried = os.time() + (cacheData.time * 60)
+        }),
+        headers = {
+            ["Content-Type"] = "application/json",
+        },
+    })
+    print("通知缓存结果>>>"..res.status.."|"..res.body.."<<<<")
 end
 
 
