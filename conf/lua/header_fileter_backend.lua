@@ -16,9 +16,7 @@ if ngx.ctx.docache then
 end
 
 if ngx.ctx.docache then
-    print(11111111)
     ngx.header["Server"] = "cnd/docache"
 else
-    print(22222222)
     ngx.header["Server"] = "cnd/back"
 end

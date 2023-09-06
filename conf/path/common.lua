@@ -109,10 +109,10 @@ function M.setcache(premature ,cacheData)
     local res, err = httpc:request_uri(cacheData.url, {
         method = "POST",
         body = json.encode({
-            SiteID = cachedata.identity,
-            Path = cachedata.uri,
-            File = cachedata.path,
-            Size = cachedata.size,
+            SiteID = cacheData.identity,
+            Path = cacheData.uri,
+            File = cacheData.path,
+            Size = cacheData.size,
             Accessed = os.time(),
             Expried = os.time() + (cacheData.time * 60)
         }),
@@ -120,7 +120,9 @@ function M.setcache(premature ,cacheData)
             ["Content-Type"] = "application/json",
         },
     })
-    print("通知缓存结果>>>"..res.status.."|"..res.body.."<<<<")
+    if res.status ~=  200 then 
+        ngx.log(ngx.ERR, "setcache() error:"..res.status.."|"..res.body)
+    end
 end
 
 
