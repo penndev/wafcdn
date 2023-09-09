@@ -1,7 +1,7 @@
 local common = require("common")
 
 -- 获取域名配置
-local config = common.hostinfo()
+local config = common.hostinfo(ngx.var.host)
 if config == nil then
     ngx.status = 403
     ngx.say("Error: Cant get host info!")
@@ -16,7 +16,6 @@ end
     -- 请求限制(限速/QPS)
 
 -- 处理请求缓存
-
 if ngx.var.request_method == "GET" then
     local doCacheTime = 0  --缓存过期时间
     if config.cache ~= nil then
@@ -30,12 +29,12 @@ if ngx.var.request_method == "GET" then
     if doCacheTime > 0 then --命中缓存规则
         local filepath = config.identity .. common.md5path(ngx.var.uri)
         local doCacheFilePath = ngx.var.cache_dir .. "/" .. filepath
-        if common.getcache(doCacheFilePath, doCacheTime) then
+        if common.cachevalid(doCacheFilePath, doCacheTime) then
             ngx.req.set_uri("/@cached/"..filepath, true)
             return
         end
-        if common.docachelock(doCacheFilePath, 30) then -- 给缓存行为加锁
-            ngx.ctx.docache = true 
+        if common.cachelock(doCacheFilePath) then -- 给缓存行为加锁
+            ngx.ctx.docache = true
             ngx.ctx.docachefilepath = doCacheFilePath
             ngx.ctx.docachetime = doCacheTime
             ngx.ctx.docacheidentity = config.identity

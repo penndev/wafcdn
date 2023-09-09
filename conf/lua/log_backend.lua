@@ -12,7 +12,7 @@ if ngx.ctx.docache and ngx.ctx.docachefile then
     if ngx.ctx.docachefinish then
         -- 获取相应内容的大小。cacheData.size = 
         ngx.ctx.docachefile:close()
-        local ok, err = ngx.timer.at(0, common.setcache, cacheData)
+        local ok, err = ngx.timer.at(0, common.cacheset, cacheData)
         if not ok then
             ngx.log(ngx.ERR, "backend_url cont create ngx.timer err:", err)
         end
