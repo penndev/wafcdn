@@ -1,6 +1,2 @@
--- 初始化加载域名信息
-
--- 获取某个域名的配置信息
--- backend 回源信息
--- limit 请求限制
-
+require("ngx.ssl")
+require("common")
