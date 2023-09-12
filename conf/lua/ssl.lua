@@ -8,7 +8,7 @@ if not ok then
 end
 
 local name, err = ssl.server_name()
-if not name then 
+if not name then
     ngx.log(ngx.ERR, "failed to get server_name certificates:", err)
     return ngx.exit(ngx.ERROR)
 end
@@ -21,7 +21,7 @@ if not ok then
     return ngx.exit(ngx.ERROR)
 end
 
-local der_cert_chain, err = ssl.cert_pem_to_der(cert.pem)
+local der_cert_chain, err = ssl.cert_pem_to_der(cert.crt)
 if not der_cert_chain then
     ngx.log(ngx.ERR, "failed to convert certificate chain ", "from PEM to DER: ", err)
     return ngx.exit(ngx.ERROR)

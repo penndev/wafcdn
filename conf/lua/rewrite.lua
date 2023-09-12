@@ -3,17 +3,12 @@ local common = require("common")
 -- 获取域名配置
 local config = common.hostinfo(ngx.var.host)
 if config == nil then
-    ngx.status = 403
-    ngx.say("Error: Cant get host info!")
-    return ngx.exit(403)
+    return ngx.exit(404)
+else
+    return ngx.exit(503)
 end
 
--- 处理防御防御
-    -- URL Header鉴权 功能通过设置鉴权算法和鉴权key来对数据进行访问保护。
-    -- Referer 开启防盗链白名单，黑名单。
-    -- IP 白名单，黑名单。
-    -- UA 白名单，黑名单。
-    -- 请求限制(限速/QPS)
+
 
 -- 处理请求缓存
 if ngx.var.request_method == "GET" then
@@ -44,3 +39,11 @@ end
 
 -- 处理回源
 ngx.ctx.back = config.back
+
+
+-- 处理防御防御
+    -- URL Header鉴权 功能通过设置鉴权算法和鉴权key来对数据进行访问保护。
+    -- Referer 开启防盗链白名单，黑名单。
+    -- IP 白名单，黑名单。
+    -- UA 白名单，黑名单。
+    -- 请求限制(限速/QPS)

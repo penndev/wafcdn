@@ -26,27 +26,10 @@ local __getSocketSSL = function(premature, rq)
     end
 end
 
-local __getSocketDomain = function(premature, rq)
-    local httpc = http.new()
-    local url = rq.url.."/socket/domain?host="..rq.host
-    local res, err = httpc:request_uri(url)
-    if not err then
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err", err)
-        return
-    end
-    if res and res.status == 200 then
-        local success, err, forcible = ngx.shared.domain:set(rq.host, res.body, __sharedTime)
-        if not err then 
-            ngx.log(ngx.ERR, "ngx.shared.domain set err", err)
-        end
-    else
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err", res)
-    end
-end
 
 -- 获取证书信息
 -- return cert{pem,key}
-local M.sslinfo(host) then
+function M.sslinfo(host)
     -- 避免缓存穿透攻击.
     local value, flags, stale = ngx.shared.ssl:get_stale(host)
     if value then -- 存在则直接返回。
@@ -55,7 +38,7 @@ local M.sslinfo(host) then
             if not ok then ngx.log(ngx.ERR, "sslinfo() cont create ngx.timer err:", err) end
         end
         local cert, err = json.decode(value)
-        if not err then
+        if err then
             ngx.log(ngx.ERR, "sslinfo cjson decode err", err)
         end
         return cert
@@ -75,34 +58,65 @@ local M.sslinfo(host) then
     return nil
 end
 
+local __getSocketDomain = function(premature, rq)
+    -- 增加请求锁，避免耗尽资源 - 延后锁写法。会有问题换一种不遗漏的写法。
+    local success, err, forcible = ngx.shared.domain_lock:add(rq.host.."_lock", true, __sharedTime)
+    if err and err ~= "exists" then -- 有异常情况。
+        ngx.log(ngx.ERR, "ngx.shared.domain_lock err", err)
+    end
+    if forcible then
+        ngx.log(ngx.ERR, "ngx.shared.domain_lock no memory")
+    end
+    if not success then
+        return nil
+    end
+    -- 获取域名配置信息
+    local httpc = http.new()
+    local url = rq.url.."/socket/domain?host="..rq.host
+    local res, err = httpc:request_uri(url)
+    if err then
+        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err: ", err)
+        return
+    end
+    if res and res.status == 200 then
+        local success, err, forcible = ngx.shared.domain:set(rq.host, res.body, __sharedTime)
+        if err or not success then 
+            ngx.log(ngx.ERR, "ngx.shared.domain set err", err)
+        end
+        if forcible then
+            ngx.log(ngx.ERR, "ngx.shared.domain_lock no memory")
+        end
+        return res.body
+    else
+        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err: ", res.status,  res.body)
+    end
+end
+
 -- 获取域名的配置信息
 -- return config{id,back,cache}
 function M.hostinfo(host)
     local value, flags, stale = ngx.shared.domain:get_stale(host)
     if value then -- 存在则直接返回。
-        if stale then 
+        if stale then
             local ok, err = ngx.timer.at(0, __getSocketDomain, {url = ngx.var.socket_url, host = host})
             if not ok then ngx.log(ngx.ERR, "hostinfo() cont create ngx.timer err:", err) end
         end
         local config, err = json.decode(value)
-        if not err then
+        if err then
             ngx.log(ngx.ERR, "hostinfo() cjson decode err", err)
         end
         return config
-    else 
-        local success, err, forcible = ngx.shared.domain_lock:add(rq.host.."_lock", true, 30)
-        if err and err ~= "exists" then -- 有异常情况。
-            ngx.log(ngx.ERR, "ngx.shared.domain_lock err", err)
+    else
+        local value = __getSocketDomain(0,{url = ngx.var.socket_url, host = host})
+        if not value then
+            return nil
         end
-        if forcible then
-            ngx.log(ngx.ERR, "ngx.shared.domain_lock no memory")
+        local config, err = json.decode(value)
+        if err then
+            ngx.log(ngx.ERR, "hostinfo() cjson decode err", err)
         end
-        if success then
-            local ok, err = ngx.timer.at(0, __getSocketDomain, {url = ngx.var.socket_url, host = host})
-            if not ok then ngx.log(ngx.ERR, "hostinfo() cont create ngx.timer err:", err) end
-        end
+        return config
     end
-    return nil
 end
 
 
