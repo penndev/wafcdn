@@ -1,5 +1,6 @@
 local common = require("common")
 
+
 -- 获取域名配置
 local config = common.hostinfo(ngx.var.host)
 if config == nil then

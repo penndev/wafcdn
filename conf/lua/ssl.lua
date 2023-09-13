@@ -13,11 +13,9 @@ if not name then
     return ngx.exit(ngx.ERROR)
 end
 
-local cert, err = common.sslinfo(name)
-if not ok then
-    if err ~= nil then -- 仅打印后端通讯错误
-        ngx.log(ngx.ERR, "failed to get sslinfo:", err)
-    end
+local cert = common.sslinfo(name)
+if not cert then
+    ngx.log(ngx.ERR, "failed to get sslinfo:", name)
     return ngx.exit(ngx.ERROR)
 end
 

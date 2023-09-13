@@ -4,63 +4,66 @@ local M = {}
 local lfs = require("lfs")
 local http = require("http")
 local json = require("cjson")
-local lock = require("resty.lock")
 
 local __sharedTime = 30
 
-local __getSocketSSL = function(premature, rq)
+local __getSocketSSL = function(premature, host)
+    local success, err, forcible = ngx.shared.ssl_lock:add(host..".lock", true, __sharedTime)
+    if err and err ~= "exists" then
+        ngx.log(ngx.ERR, "ngx.shared.ssl_lock err:", err)
+    end
+    if forcible then
+        ngx.log(ngx.ERR, "ngx.shared.ssl_lock no memory")
+    end
+    if not success then
+        return nil
+    end
     local httpc = http.new()
-    local url = rq.url.."/socket/ssl?host="..rq.host
-    local res, err = httpc:request_uri(url)
-    if not err then
-        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err", err)
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/ssl?host="..host)
+    if err then
+        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", err)
         return
     end
     if res and res.status == 200 then
-        local success, err, forcible = ngx.shared.ssl:set(rq.host, res.body, __sharedTime)
-        if not err then 
-            ngx.log(ngx.ERR, "ngx.shared.ssl set err", err)
+        local certbase64, err = json.decode(res.body)
+        if err then
+            ngx.log(ngx.ERR, "sslinfo cjson decode err", err)
         end
+        local crt = ngx.decode_base64(certbase64.crt)
+        local key = ngx.decode_base64(certbase64.key)
+
+        local success, err, forcible = ngx.shared.ssl:set(host, crt.. "$" ..key, __sharedTime)
+        if err or not success then
+            ngx.log(ngx.ERR, "ngx.shared.ssl set err:", err)
+        end
+        if forcible then
+            ngx.log(ngx.ERR, "ngx.shared.ssl no memory")
+        end
+        return {crt = crt,key = key}
     else
-        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err", res)
+        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", res.status,  res.body)
     end
 end
-
 
 -- 获取证书信息
 -- return cert{pem,key}
 function M.sslinfo(host)
-    -- 避免缓存穿透攻击.
     local value, flags, stale = ngx.shared.ssl:get_stale(host)
     if value then -- 存在则直接返回。
         if stale then  -- 存在但是过期了
-            local ok, err = ngx.timer.at(0, __getSocketSSL, {url = ngx.var.socket_url, host = host})
+            local ok, err = ngx.timer.at(0, __getSocketSSL, host)
             if not ok then ngx.log(ngx.ERR, "sslinfo() cont create ngx.timer err:", err) end
         end
-        local cert, err = json.decode(value)
-        if err then
-            ngx.log(ngx.ERR, "sslinfo cjson decode err", err)
-        end
-        return cert
+        local crt,key = value:match("(.-)%$(.+)")
+        return {crt = crt,key = key}
     else --完全不存在.
-        local success, err, forcible = ngx.shared.ssl_lock:add(host..".lock", true, __sharedTime)
-        if err and err ~= "exists" then -- 有异常情况。
-            ngx.log(ngx.ERR, "ngx.shared.ssl_lock err", err)
-        end
-        if forcible then
-            ngx.log(ngx.ERR, "ngx.shared.ssl_lock no memory")
-        end
-        if success then
-            local ok, err = ngx.timer.at(0, __getSocketSSL, {url = ngx.var.socket_url, host = host})
-            if not ok then ngx.log(ngx.ERR, "sslinfo() cont create ngx.timer err:", err) end
-        end
+        return __getSocketSSL(0,host)
     end
-    return nil
 end
 
-local __getSocketDomain = function(premature, rq)
+local __getSocketDomain = function(premature, host)
     -- 增加请求锁，避免耗尽资源 - 延后锁写法。会有问题换一种不遗漏的写法。
-    local success, err, forcible = ngx.shared.domain_lock:add(rq.host.."_lock", true, __sharedTime)
+    local success, err, forcible = ngx.shared.domain_lock:add(host.."_lock", true, __sharedTime)
     if err and err ~= "exists" then -- 有异常情况。
         ngx.log(ngx.ERR, "ngx.shared.domain_lock err", err)
     end
@@ -72,14 +75,13 @@ local __getSocketDomain = function(premature, rq)
     end
     -- 获取域名配置信息
     local httpc = http.new()
-    local url = rq.url.."/socket/domain?host="..rq.host
-    local res, err = httpc:request_uri(url)
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/domain?host="..host)
     if err then
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err: ", err)
+        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", err)
         return
     end
     if res and res.status == 200 then
-        local success, err, forcible = ngx.shared.domain:set(rq.host, res.body, __sharedTime)
+        local success, err, forcible = ngx.shared.domain:set(host, res.body, __sharedTime)
         if err or not success then 
             ngx.log(ngx.ERR, "ngx.shared.domain set err", err)
         end
@@ -88,7 +90,7 @@ local __getSocketDomain = function(premature, rq)
         end
         return res.body
     else
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err: ", res.status,  res.body)
+        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", res.status,  res.body)
     end
 end
 
@@ -98,7 +100,7 @@ function M.hostinfo(host)
     local value, flags, stale = ngx.shared.domain:get_stale(host)
     if value then -- 存在则直接返回。
         if stale then
-            local ok, err = ngx.timer.at(0, __getSocketDomain, {url = ngx.var.socket_url, host = host})
+            local ok, err = ngx.timer.at(0, __getSocketDomain, host)
             if not ok then ngx.log(ngx.ERR, "hostinfo() cont create ngx.timer err:", err) end
         end
         local config, err = json.decode(value)
@@ -107,7 +109,7 @@ function M.hostinfo(host)
         end
         return config
     else
-        local value = __getSocketDomain(0,{url = ngx.var.socket_url, host = host})
+        local value = __getSocketDomain(0, host)
         if not value then
             return nil
         end
@@ -204,6 +206,27 @@ function M.redownload(premature, downData, cacheData)
         os.remove(cacheData.path)
     end
     httpc:close()
+end
+
+-- 定义一个trim函数
+function M.trim(s)
+    return s:gsub("^%s*(.-)%s*$", "%1")
+end
+
+local envTable = {}
+local envfile = io.open(".env", "r")
+if not envfile then
+    error("can't load the .env file")
+end
+for line in envfile:lines() do
+    local key, value = M.trim(line):match("^([^=]+)=(.+)$")
+    if key and value then
+        envTable[key] = value
+    end
+end
+
+function M.getenv(key)
+    return envTable[key]
 end
 
 return M
