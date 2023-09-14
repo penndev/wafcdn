@@ -172,9 +172,9 @@ end
 
 -- 缓存成功
 -- 调用端口处理缓存目录。
-function M.cacheset(premature ,cacheData)
+function M.docache(premature ,cacheData)
     local httpc = http.new()
-    local res, err = httpc:request_uri(cacheData.url, {
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/docache", {
         method = "POST",
         body = json.encode({
             SiteID = cacheData.identity,
@@ -186,10 +186,10 @@ function M.cacheset(premature ,cacheData)
         }),
         headers = {
             ["Content-Type"] = "application/json",
-        },
+        }
     })
     if res.status ~=  200 then 
-        ngx.log(ngx.ERR, "cacheset() err", res)
+        ngx.log(ngx.ERR, "cacheset() err:", res.status, res.body, err)
     end
 end
 
@@ -201,7 +201,7 @@ function M.redownload(premature, downData, cacheData)
         downData.file:seek("set")
         file:write(res.body)
         downData.file:close()
-        M.cacheset(premature,cacheData)
+        M.docache(premature,cacheData)
     else
         os.remove(cacheData.path)
     end

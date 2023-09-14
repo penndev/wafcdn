@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -33,7 +34,7 @@ type DomainInfo struct {
 		} `json:"header"`
 	} `json:"backend"`
 	Cache []struct {
-		Path string `json:"paht"` // 注意这里是 "path" 而不是 "paht"
+		Path string `json:"path"` // 注意这里是 "path" 而不是 "paht"
 		Time int    `json:"time"`
 	} `json:"cache"`
 }
@@ -68,8 +69,8 @@ func initDomainConfig(domainFile string) {
 // - 缓存文件数据库
 // -
 type Cache struct {
-	SiteID   int    `gorm:"primaryKey;comment:请求网站" binding:"required"`
-	Path     string `gorm:"primaryKey;comment:请求路径" binding:"required"`
+	SiteID   string `gorm:"comment:网站标识" binding:"required"`
+	Path     string `gorm:"comment:请求路径" binding:"required"`
 	File     string `gorm:"comment:文件路径" binding:"required"`
 	Size     int    `gorm:"comment:文件大小" binding:"required"`
 	Accessed int64  `gorm:"comment:访问时间lru用" binding:"required"`
@@ -108,7 +109,6 @@ func handleGetDomain(c *gin.Context) {
 	host := c.Query("host")
 	if host != "" {
 		if item, ok := DomainInfoMap[host]; ok {
-			time.Sleep(30 * time.Second)
 			c.JSON(200, gin.H{
 				"identity": item.Identity,
 				"backend":  item.Backend,
@@ -119,8 +119,16 @@ func handleGetDomain(c *gin.Context) {
 	}
 	c.Status(400)
 }
-func handleSetCache(c *gin.Context) {
-
+func handleDoCache(c *gin.Context) {
+	cachedData := Cache{}
+	err := c.ShouldBindJSON(&cachedData)
+	if err == nil {
+		log.Println(err)
+		c.Status(400)
+		return
+	}
+	log.Println(cachedData)
+	c.Status(200)
 }
 
 func initListenServe(addr string) {
@@ -129,6 +137,7 @@ func initListenServe(addr string) {
 	{
 		socks.GET("/ssl", handleGetSSL)       // 获取证书
 		socks.GET("/domain", handleGetDomain) // 获取域名
+		socks.POST("/docache", handleDoCache)
 	}
 
 	err := http.ListenAndServe(addr, route)
