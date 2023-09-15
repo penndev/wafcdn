@@ -28,7 +28,8 @@ if ngx.var.request_method == "GET" then
         local filepath = config.identity .. common.md5path(ngx.var.uri)
         local doCacheFilePath = common.getenv("CACHE_DIR") .. "/" .. filepath
         if common.cachevalid(doCacheFilePath, doCacheTime) then --缓存命中
-            ngx.req.set_uri("/@cache/"..filepath, true)
+            ngx.req.set_uri_args({cache_file=doCacheFilePath})
+            ngx.req.set_uri("/@cache", true)
             return
         end
         if common.cachelock(doCacheFilePath) then -- 给缓存行为加锁

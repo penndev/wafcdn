@@ -1,11 +1,31 @@
 -- 公共方法模块
 local M = {}
 
+local envTable = {}
+local envfile = io.open(".env", "r")
+if not envfile then
+    error("can't load the .env file")
+end
+for line in envfile:lines() do
+    local key, value = line:gsub("^%s*(.-)%s*$", "%1"):match("^([^=]+)=(.+)$")
+    if key and value then
+        envTable[key] = value
+    end
+end
+
+function M.getenv(key)
+    return envTable[key]
+end
+
+local __sharedTime = tonumber(envTable["SHARED_TTL"])
+if __sharedTime < 30 then
+    __sharedTime = 300
+end
+
 local lfs = require("lfs")
 local http = require("http")
 local json = require("cjson")
 
-local __sharedTime = 30
 
 local __getSocketSSL = function(premature, host)
     local success, err, forcible = ngx.shared.ssl_lock:add(host..".lock", true, __sharedTime)
@@ -172,7 +192,7 @@ end
 
 -- 缓存成功
 -- 调用端口处理缓存目录。
-function M.docache(premature ,cacheData)
+function M.docache(premature,cacheData)
     local httpc = http.new()
     local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/docache", {
         method = "POST",
@@ -189,9 +209,28 @@ function M.docache(premature ,cacheData)
         }
     })
     if res.status ~=  200 then 
-        ngx.log(ngx.ERR, "cacheset() err:", res.status, res.body, err)
+        ngx.log(ngx.ERR, "docache() err:", res.status, res.body, err)
     end
 end
+
+-- 刷新缓存访问
+function M.upcache(premature, file, time) 
+    local httpc = http.new()
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/upcache", {
+        method = "POST",
+        body = json.encode({
+            File = file,
+            Accessed = time,
+        }),
+        headers = {
+            ["Content-Type"] = "application/json",
+        }
+    })
+    if res.status ~=  200 then 
+        ngx.log(ngx.ERR, "upcache() err:", res.status, res.body, err)
+    end
+end
+
 
 -- 重新缓存文件
 function M.redownload(premature, downData, cacheData)
@@ -206,27 +245,6 @@ function M.redownload(premature, downData, cacheData)
         os.remove(cacheData.path)
     end
     httpc:close()
-end
-
--- 定义一个trim函数
-function M.trim(s)
-    return s:gsub("^%s*(.-)%s*$", "%1")
-end
-
-local envTable = {}
-local envfile = io.open(".env", "r")
-if not envfile then
-    error("can't load the .env file")
-end
-for line in envfile:lines() do
-    local key, value = M.trim(line):match("^([^=]+)=(.+)$")
-    if key and value then
-        envTable[key] = value
-    end
-end
-
-function M.getenv(key)
-    return envTable[key]
 end
 
 return M

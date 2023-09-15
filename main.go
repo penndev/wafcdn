@@ -11,6 +11,7 @@ import (
 	// "gorm.io/driver/sqlite"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite" // 更兼容
+	"github.com/penndev/wafcdn/du"
 	"gorm.io/gorm"
 )
 
@@ -68,13 +69,16 @@ func initDomainConfig(domainFile string) {
 
 // - 缓存文件数据库
 // -
-type Cache struct {
-	SiteID   string `gorm:"comment:网站标识" binding:"required"`
-	Path     string `gorm:"comment:请求路径" binding:"required"`
+type CacheUp struct {
 	File     string `gorm:"comment:文件路径" binding:"required"`
-	Size     int    `gorm:"comment:文件大小" binding:"required"`
 	Accessed int64  `gorm:"comment:访问时间lru用" binding:"required"`
-	Expried  int64  `gorm:"comment:过期时间" binding:"required"`
+}
+type Cache struct {
+	CacheUp
+	SiteID  string `gorm:"comment:网站标识" binding:"required"`
+	Path    string `gorm:"comment:请求路径" binding:"required"`
+	Size    int    `gorm:"comment:文件大小" binding:"required"`
+	Expried int64  `gorm:"comment:过期时间" binding:"required"`
 }
 
 var CacheData *gorm.DB
@@ -86,6 +90,37 @@ func initCacheData(db string) {
 		panic("创建缓存数据库失败")
 	}
 	CacheData.AutoMigrate(&Cache{})
+}
+
+// 处理任务队列
+type CacheTask struct {
+	CacheUp   map[string]*CacheUp
+	CacheData map[string]*Cache
+}
+
+func (t *CacheTask) InsertCache(c *Cache) {
+	t.CacheData[c.File] = c
+}
+
+func (t *CacheTask) InsertCacheUp(c *CacheUp) {
+	if item, ok := t.CacheData[c.File]; ok {
+		item.Accessed = c.Accessed
+		return
+	}
+	t.CacheUp[c.File] = c
+}
+
+var cacheTask = CacheTask{
+	CacheUp:   make(map[string]*CacheUp),
+	CacheData: make(map[string]*Cache),
+}
+
+func initCacheTask() {
+	// 开启循环更新进程
+	// 开启循环检查硬盘进程
+	// usage := du.New("/path/to")
+	df := du.NewDiskUsage("c:/usr/local/openresty/cache_temp")
+	log.Println(df.Usage(), df.Size())
 }
 
 // 对nginx提供接口
@@ -120,14 +155,25 @@ func handleGetDomain(c *gin.Context) {
 	c.Status(400)
 }
 func handleDoCache(c *gin.Context) {
-	cachedData := Cache{}
-	err := c.ShouldBindJSON(&cachedData)
+	cache := Cache{}
+	err := c.ShouldBindJSON(&cache)
 	if err == nil {
 		log.Println(err)
 		c.Status(400)
 		return
 	}
-	log.Println(cachedData)
+	cacheTask.InsertCache(&cache)
+	c.Status(200)
+}
+func handleUpCache(c *gin.Context) {
+	cacheUp := CacheUp{}
+	err := c.ShouldBindJSON(&cacheUp)
+	if err == nil {
+		log.Println(err)
+		c.Status(400)
+		return
+	}
+	cacheTask.InsertCacheUp(&cacheUp)
 	c.Status(200)
 }
 
@@ -138,6 +184,7 @@ func initListenServe(addr string) {
 		socks.GET("/ssl", handleGetSSL)       // 获取证书
 		socks.GET("/domain", handleGetDomain) // 获取域名
 		socks.POST("/docache", handleDoCache)
+		socks.POST("/upcache", handleUpCache)
 	}
 
 	err := http.ListenAndServe(addr, route)
@@ -149,5 +196,6 @@ func initListenServe(addr string) {
 func main() {
 	initDomainConfig(".domain")
 	initCacheData(".cache")
+	initCacheTask()
 	initListenServe("127.0.0.1:8081")
 }
