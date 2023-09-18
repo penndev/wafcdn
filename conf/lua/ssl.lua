@@ -31,7 +31,7 @@ if not ok then
     return ngx.exit(ngx.ERROR)
 end
 
-local der_pkey, err = ssl.priv_key_pem_to_der(cert.key, nil)
+local der_pkey, err = ssl.priv_key_pem_to_der(cert.key)
 if not der_pkey then
     ngx.log(ngx.ERR, "failed to convert private key ", "from PEM to DER: ", err)
     return ngx.exit(ngx.ERROR)

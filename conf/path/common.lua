@@ -26,7 +26,6 @@ local lfs = require("lfs")
 local http = require("http")
 local json = require("cjson")
 
-
 local __getSocketSSL = function(premature, host)
     local success, err, forcible = ngx.shared.ssl_lock:add(host..".lock", true, __sharedTime)
     if err and err ~= "exists" then
@@ -141,6 +140,12 @@ function M.hostinfo(host)
     end
 end
 
+function M.contentType(type)
+    if type == "ts" then
+        return "video/mp2t"
+    end
+    return nil
+end
 
 -- 计算路径的md5路径
 function M.md5path(uri)
@@ -153,7 +158,11 @@ end
 function M.mkdir(path)
     local res, err = lfs.mkdir(path)
     if not res then
-        local parent = path:gsub("/[^/]+/$", "/")
+        local parent, count = path:gsub("/[^/]+/$", "/")
+        if count ~= 1 then
+            ngx.log(ngx.ERR, "创建文件夹失败[".. path .. "]", err)
+            return nil
+        end
         if M.mkdir(parent) then
             local res, err = lfs.mkdir(path)
             if err ~= nil then ngx.log(ngx.ERR, "创建文件夹失败[".. path .. "]", err) end
@@ -231,7 +240,6 @@ function M.upcache(premature, file, time)
     end
 end
 
-
 -- 重新缓存文件
 function M.redownload(premature, downData, cacheData)
     local httpc = http.new()
@@ -240,6 +248,7 @@ function M.redownload(premature, downData, cacheData)
         downData.file:seek("set")
         downData.file:write(res.body)
         downData.file:close()
+        cacheData.size = tonumber(res.headers["Content-Length"])
         M.docache(premature,cacheData)
     else
         os.remove(cacheData.path)

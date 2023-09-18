@@ -16,7 +16,9 @@ if ngx.ctx.docache then
 end
 
 if ngx.ctx.docache then
-    ngx.header["Server"] = "cnd/docache"
+    ngx.header["Server"] = "cnd#docache"
 else
-    ngx.header["Server"] = "cnd/back"
+    ngx.header["Server"] = "cnd#back"
 end
+
+-- 处理响应头 ngx.ctx.backend.rheader

@@ -33,12 +33,16 @@ type DomainInfo struct {
 	} `json:"ssl"`
 	Identity string `json:"identity"`
 	Backend  struct {
-		URL    string `json:"url"`
-		Host   string `json:"host"`
-		Header []struct {
+		URL       string `json:"url"`
+		Host      string `json:"host"`
+		ReqHeader []struct {
 			Name  string `json:"name"`
 			Value string `json:"value"`
-		} `json:"header"`
+		} `json:"req_header"`
+		RespHeader []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"resp_header"`
 	} `json:"backend"`
 	Cache []struct {
 		Path string `json:"path"` // 注意这里是 "path" 而不是 "paht"
