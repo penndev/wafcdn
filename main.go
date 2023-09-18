@@ -6,12 +6,18 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	// "gorm.io/driver/sqlite"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite" // 更兼容
-	"github.com/penndev/wafcdn/du"
+	"github.com/joho/godotenv"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/net"
 	"gorm.io/gorm"
 )
 
@@ -70,15 +76,16 @@ func initDomainConfig(domainFile string) {
 // - 缓存文件数据库
 // -
 type CacheUp struct {
-	File     string `gorm:"comment:文件路径" binding:"required"`
+	File     string `gorm:"primarykey;comment:文件路径" binding:"required"`
 	Accessed int64  `gorm:"comment:访问时间lru用" binding:"required"`
 }
 type Cache struct {
 	CacheUp
-	SiteID  string `gorm:"comment:网站标识" binding:"required"`
-	Path    string `gorm:"comment:请求路径" binding:"required"`
-	Size    int    `gorm:"comment:文件大小" binding:"required"`
-	Expried int64  `gorm:"comment:过期时间" binding:"required"`
+	SiteID    string `gorm:"comment:网站标识" binding:"required"`
+	Path      string `gorm:"comment:请求路径" binding:"required"`
+	Size      int    `gorm:"comment:文件大小"`
+	Expried   int64  `gorm:"comment:过期时间" binding:"required"`
+	CreatedAt time.Time
 }
 
 var CacheData *gorm.DB
@@ -94,16 +101,17 @@ func initCacheData(db string) {
 
 // 处理任务队列
 type CacheTask struct {
-	CacheUp   map[string]*CacheUp
-	CacheData map[string]*Cache
+	sync.Mutex
+	CacheUp map[string]*CacheUp
+	Cache   map[string]*Cache
 }
 
 func (t *CacheTask) InsertCache(c *Cache) {
-	t.CacheData[c.File] = c
+	t.Cache[c.File] = c
 }
 
 func (t *CacheTask) InsertCacheUp(c *CacheUp) {
-	if item, ok := t.CacheData[c.File]; ok {
+	if item, ok := t.Cache[c.File]; ok {
 		item.Accessed = c.Accessed
 		return
 	}
@@ -111,16 +119,76 @@ func (t *CacheTask) InsertCacheUp(c *CacheUp) {
 }
 
 var cacheTask = CacheTask{
-	CacheUp:   make(map[string]*CacheUp),
-	CacheData: make(map[string]*Cache),
+	CacheUp: make(map[string]*CacheUp),
+	Cache:   make(map[string]*Cache),
 }
 
-func initCacheTask() {
-	// 开启循环更新进程
-	// 开启循环检查硬盘进程
-	// usage := du.New("/path/to")
-	df := du.NewDiskUsage("c:/usr/local/openresty/cache_temp")
-	log.Println(df.Usage(), df.Size())
+func initCacheTask(delay time.Duration, rate int) {
+	go func() {
+		ticker := time.NewTicker(delay)
+		for {
+			select {
+			case <-ticker.C:
+				// 下个周期开始前。
+
+				next := time.Now().Add(delay * 2).Unix()
+				// 提交数据更改。
+				cacheTask.Lock()
+				actionCache := cacheTask.Cache
+				actionCacheUp := cacheTask.CacheUp
+				cacheTask.Cache = make(map[string]*Cache)
+				cacheTask.CacheUp = make(map[string]*CacheUp)
+				cacheTask.Unlock()
+				//
+				tx := CacheData.Begin()
+				if tx.Error != nil {
+					log.Println("事务开始失败:", tx.Error)
+					continue
+				}
+				for _, cache := range actionCache {
+					tx.Create(cache)
+				}
+				for file, cacheup := range actionCacheUp {
+					where := &Cache{}
+					where.File = file
+					update := Cache{}
+					update.Accessed = cacheup.Accessed
+					tx.Where(where).Updates(update)
+				}
+				tx.Commit()
+				if tx.Error != nil {
+					log.Println("事务提交失败:", tx.Error)
+					continue
+				}
+				for next >= time.Now().Unix() {
+					// 检查硬盘空间
+					df, _ := disk.Usage(os.Getenv("CACHE_DIR"))
+					if df.UsedPercent > 90 {
+						// "删除过期的文件，
+						var exprieds []string
+						CacheData.Model(&Cache{}).Select("File").Where("Expried < ?", next).Order("Expried ASC").Limit(1000).Pluck("File", &exprieds)
+						CacheData.Delete(&Cache{}, exprieds)
+						for _, f := range exprieds {
+							os.Remove(f)
+						}
+
+						// lru删除缓存"
+						var accesseds []string
+						CacheData.Model(&Cache{}).Select("File").Order("Accessed ASC").Limit(1000).Pluck("File", &accesseds)
+						CacheData.Delete(&Cache{}, accesseds)
+						for _, f := range accesseds {
+							os.Remove(f)
+						}
+						continue
+					} else {
+						log.Println("硬盘使用进度", df.UsedPercent, next-time.Now().Unix())
+						break
+					}
+				}
+			}
+		}
+	}()
+
 }
 
 // 对nginx提供接口
@@ -157,7 +225,7 @@ func handleGetDomain(c *gin.Context) {
 func handleDoCache(c *gin.Context) {
 	cache := Cache{}
 	err := c.ShouldBindJSON(&cache)
-	if err == nil {
+	if err != nil {
 		log.Println(err)
 		c.Status(400)
 		return
@@ -168,13 +236,28 @@ func handleDoCache(c *gin.Context) {
 func handleUpCache(c *gin.Context) {
 	cacheUp := CacheUp{}
 	err := c.ShouldBindJSON(&cacheUp)
-	if err == nil {
+	if err != nil {
 		log.Println(err)
 		c.Status(400)
 		return
 	}
 	cacheTask.InsertCacheUp(&cacheUp)
 	c.Status(200)
+}
+
+func handleRemoteStat(c *gin.Context) {
+	m, _ := mem.VirtualMemory()
+	u, _ := cpu.Percent(0, false)
+	d, _ := disk.Usage(os.Getenv("CACHE_DIR"))
+	i, _ := disk.IOCounters()
+	n, _ := net.IOCounters(false)
+	c.JSON(200, gin.H{
+		"mem": m,
+		"cpu": u,
+		"df":  d,
+		"io":  i,
+		"net": n,
+	})
 }
 
 func initListenServe(addr string) {
@@ -187,6 +270,11 @@ func initListenServe(addr string) {
 		socks.POST("/upcache", handleUpCache)
 	}
 
+	remote := route.Group("/remote")
+	{
+		remote.GET("/stat", handleRemoteStat)
+	}
+
 	err := http.ListenAndServe(addr, route)
 	if err != nil {
 		panic(err)
@@ -194,8 +282,23 @@ func initListenServe(addr string) {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file", err)
+	}
 	initDomainConfig(".domain")
 	initCacheData(".cache")
-	initCacheTask()
-	initListenServe("127.0.0.1:8081")
+	cacherate, err := strconv.Atoi(os.Getenv("CACHE_CHECK_RATE"))
+	if err != nil {
+		log.Println("Env get CACHE_CHECK_RATE err", err)
+		cacherate = 90
+	}
+	cachettl, err := strconv.Atoi(os.Getenv("CACHE_CHECK_TTL"))
+	if err != nil {
+		log.Println("Env get CACHE_CHECK_TTL err", err)
+		cachettl = 60
+	}
+	initCacheTask(time.Second*time.Duration(cachettl), cacherate)
+	gin.SetMode(os.Getenv("MODE"))
+	initListenServe(os.Getenv("LISTEN"))
 }

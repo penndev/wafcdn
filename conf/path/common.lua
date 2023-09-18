@@ -238,7 +238,7 @@ function M.redownload(premature, downData, cacheData)
     local res, err = httpc:request_uri(downData.url, downData.params)
     if res.status == 200 then
         downData.file:seek("set")
-        file:write(res.body)
+        downData.file:write(res.body)
         downData.file:close()
         M.docache(premature,cacheData)
     else
