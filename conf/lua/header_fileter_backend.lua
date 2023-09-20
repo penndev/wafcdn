@@ -1,24 +1,23 @@
-if ngx.ctx.docache then
-    if ngx.status == 200 then 
-        local filepath = ngx.ctx.docachefilepath:match("(.*/)")
-        if require("common").mkdir(filepath) then -- 创建目录失败
-            local file, err = io.open(ngx.ctx.docachefilepath, "w")
-            if err then 
-                ngx.log(ngx.ERR, err)
-                ngx.ctx.docache = false
-                return
-            end
-            ngx.ctx.docachefile = file
-        else
-            ngx.ctx.docache = false
-        end
-    end
-end
-
+local common = require("common")
 if ngx.ctx.docache then
     ngx.header["Server"] = "cnd#docache"
 else
     ngx.header["Server"] = "cnd#back"
 end
 
--- 处理响应头 ngx.ctx.backend.rheader
+if ngx.ctx.docache then
+    if ngx.status == 200 then
+        local file, err = io.open(ngx.ctx.docachefilepath, "wb")
+        if err then
+            local directory = string.match(ngx.ctx.docachefilepath, "(.*)/")
+            if common.mkdir(directory) then
+                file, err = io.open(ngx.ctx.docachefilepath, "wb")
+            end
+            if err then
+                ngx.log(ngx.ERR, err, "|", ngx.ctx.docachefilepath, "|")
+                file = nil
+            end
+        end
+        ngx.ctx.docachefile = file
+    end
+end

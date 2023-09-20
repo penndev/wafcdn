@@ -27,7 +27,7 @@ local http = require("http")
 local json = require("cjson")
 
 local __getSocketSSL = function(premature, host)
-    local success, err, forcible = ngx.shared.ssl_lock:add(host..".lock", true, __sharedTime)
+    local success, err, forcible = ngx.shared.ssl_lock:add(host .. ".lock", true, __sharedTime)
     if err and err ~= "exists" then
         ngx.log(ngx.ERR, "ngx.shared.ssl_lock err:", err)
     end
@@ -38,7 +38,7 @@ local __getSocketSSL = function(premature, host)
         return nil
     end
     local httpc = http.new()
-    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/ssl?host="..host)
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/ssl?host=" .. host)
     if err then
         ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", err)
         return
@@ -51,16 +51,16 @@ local __getSocketSSL = function(premature, host)
         local crt = ngx.decode_base64(certbase64.crt)
         local key = ngx.decode_base64(certbase64.key)
 
-        local success, err, forcible = ngx.shared.ssl:set(host, crt.. "$" ..key, __sharedTime)
+        local success, err, forcible = ngx.shared.ssl:set(host, crt .. "$" .. key, __sharedTime)
         if err or not success then
             ngx.log(ngx.ERR, "ngx.shared.ssl set err:", err)
         end
         if forcible then
             ngx.log(ngx.ERR, "ngx.shared.ssl no memory")
         end
-        return {crt = crt,key = key}
+        return { crt = crt, key = key }
     else
-        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", res.status,  res.body)
+        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", res.status, res.body)
     end
 end
 
@@ -68,21 +68,21 @@ end
 -- return cert{pem,key}
 function M.sslinfo(host)
     local value, flags, stale = ngx.shared.ssl:get_stale(host)
-    if value then -- 存在则直接返回。
-        if stale then  -- 存在但是过期了
+    if value then     -- 存在则直接返回。
+        if stale then -- 存在但是过期了
             local ok, err = ngx.timer.at(0, __getSocketSSL, host)
             if not ok then ngx.log(ngx.ERR, "sslinfo() cont create ngx.timer err:", err) end
         end
-        local crt,key = value:match("(.-)%$(.+)")
-        return {crt = crt,key = key}
+        local crt, key = value:match("(.-)%$(.+)")
+        return { crt = crt, key = key }
     else --完全不存在.
-        return __getSocketSSL(0,host)
+        return __getSocketSSL(0, host)
     end
 end
 
 local __getSocketDomain = function(premature, host)
     -- 增加请求锁，避免耗尽资源 - 延后锁写法。会有问题换一种不遗漏的写法。
-    local success, err, forcible = ngx.shared.domain_lock:add(host.."_lock", true, __sharedTime)
+    local success, err, forcible = ngx.shared.domain_lock:add(host .. "_lock", true, __sharedTime)
     if err and err ~= "exists" then -- 有异常情况。
         ngx.log(ngx.ERR, "ngx.shared.domain_lock err", err)
     end
@@ -94,14 +94,14 @@ local __getSocketDomain = function(premature, host)
     end
     -- 获取域名配置信息
     local httpc = http.new()
-    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/domain?host="..host)
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/domain?host=" .. host)
     if err then
         ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", err)
         return
     end
     if res and res.status == 200 then
         local success, err, forcible = ngx.shared.domain:set(host, res.body, __sharedTime)
-        if err or not success then 
+        if err or not success then
             ngx.log(ngx.ERR, "ngx.shared.domain set err", err)
         end
         if forcible then
@@ -109,7 +109,7 @@ local __getSocketDomain = function(premature, host)
         end
         return res.body
     else
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", res.status,  res.body)
+        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", res.status, res.body)
     end
 end
 
@@ -158,25 +158,46 @@ end
 function M.mkdir(path)
     local res, err = lfs.mkdir(path)
     if not res then
-        local parent, count = path:gsub("/[^/]+/$", "/")
+        if lfs.attributes(path, 'mode') == 'directory' then
+            return true
+        end
+        local parent, count = string.gsub(path, "/[^/]+$", "")
         if count ~= 1 then
-            ngx.log(ngx.ERR, "创建文件夹失败[".. path .. "]", err)
+            ngx.log(ngx.ERR, "创建文件夹失败[" .. path .. "]", parent, err)
             return nil
         end
         if M.mkdir(parent) then
             local res, err = lfs.mkdir(path)
-            if err ~= nil then ngx.log(ngx.ERR, "创建文件夹失败[".. path .. "]", err) end
+            if not res then
+                ngx.log(ngx.ERR, "创建文件夹失败[" .. path .. "]", err)
+            end
             return res
         end
     end
     return res
+
+
+    -- if not res then
+
+    --     local parent, count = path:gsub("/[^/]+/$", "/")
+    --     if count ~= 1 then
+    --         ngx.log(ngx.ERR, "创建文件夹失败[" .. path .. "]", parent, err)
+    --         return nil
+    --     end
+    --     if M.mkdir(parent) then
+    --         local res, err = lfs.mkdir(path)
+    --         if err ~= nil then ngx.log(ngx.ERR, "创建文件夹失败[" .. path .. "]", err) end
+    --         return res
+    --     end
+    -- end
+    -- return res
 end
 
 -- 验证缓存是否过期
 -- path 文件路径, expired 缓存时间
 -- return boolean 是否有效
 function M.cachevalid(path, expired)
-    local modification, err  = lfs.attributes(path, "modification")
+    local modification, err = lfs.attributes(path, "modification")
     if modification then
         local expired_time = expired * 60 + modification
         if expired_time > os.time() then
@@ -201,9 +222,9 @@ end
 
 -- 缓存成功
 -- 调用端口处理缓存目录。
-function M.docache(premature,cacheData)
+function M.docache(premature, cacheData)
     local httpc = http.new()
-    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/docache", {
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/docache", {
         method = "POST",
         body = json.encode({
             SiteID = cacheData.identity,
@@ -217,15 +238,19 @@ function M.docache(premature,cacheData)
             ["Content-Type"] = "application/json",
         }
     })
-    if res.status ~=  200 then 
+    if res.status ~= 200 then
         ngx.log(ngx.ERR, "docache() err:", res.status, res.body, err)
     end
 end
 
 -- 刷新缓存访问
-function M.upcache(premature, file, time) 
+function M.upcache(premature, file, time)
     local httpc = http.new()
-    local res, err = httpc:request_uri(M.getenv("SOCKET_API").."/socket/upcache", {
+    if not httpc then
+        ngx.log(ngx.ERR, "http.new return nil")
+        return nil
+    end
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/upcache", {
         method = "POST",
         body = json.encode({
             File = file,
@@ -235,23 +260,40 @@ function M.upcache(premature, file, time)
             ["Content-Type"] = "application/json",
         }
     })
-    if res.status ~=  200 then 
+    if not res then
+        ngx.log(ngx.ERR, "http.request_uri return nil", err)
+        return nil
+    end
+    if res.status ~= 200 then
         ngx.log(ngx.ERR, "upcache() err:", res.status, res.body, err)
     end
 end
 
 -- 重新缓存文件
-function M.redownload(premature, downData, cacheData)
+function M.redownload(premature, req, cacheMeta)
     local httpc = http.new()
-    local res, err = httpc:request_uri(downData.url, downData.params)
+    if not httpc then
+        ngx.log(ngx.ERR, "http.new return nil")
+        return nil
+    end
+    local res, err = httpc:request_uri(req.url, req.params)
+    if not res then
+        ngx.log(ngx.ERR, "http.request_uri return nil", err)
+        return nil
+    end
+    ngx.log(ngx.INFO, "重新下载文件", req.url, "|status|", res.status)
     if res.status == 200 then
-        downData.file:seek("set")
-        downData.file:write(res.body)
-        downData.file:close()
-        cacheData.size = tonumber(res.headers["Content-Length"])
-        M.docache(premature,cacheData)
+        req.file:seek("set", 0)
+        req.file:write(res.body)
+        req.file:close()
+        cacheMeta.size = tonumber(res.headers["Content-Length"])
+        M.docache(premature, cacheMeta)
     else
-        os.remove(cacheData.path)
+        req.file:close()
+        local success, err = os.remove(cacheMeta.path)
+        if not success then
+            ngx.log(ngx.ERR, "cant remove cache file ", err)
+        end
     end
     httpc:close()
 end

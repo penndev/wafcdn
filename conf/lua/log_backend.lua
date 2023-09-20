@@ -17,18 +17,20 @@ if ngx.ctx.docache and ngx.ctx.docachefile then
             ngx.log(ngx.ERR, "backend_url cont create ngx.timer err:", err)
         end
     else
-        -- 重新下载文件并
-        local downData = {
+        -- 重新下载文件
+        local req = {
             file = ngx.ctx.docachefile,
             url = ngx.var.backend_url ..  ngx.var.request_uri, --请求的网址
             params = { keepalive_timeout = 60000, keepalive_pool = 10, method = ngx.req.get_method(), headers = ngx.req.get_headers(), body = ngx.req.get_body_data() }
         }
-        ngx.log(ngx.INFO, "重新下载文件", downData.url)
-        local ok, err = ngx.timer.at( 0, common.redownload,  downData,  cacheData )
+        local ok, err = ngx.timer.at(0, common.redownload,  req,  cacheData )
         if not ok then
             ngx.log(ngx.ERR, "redownload() cont create ngx.timer err:", err)
             ngx.ctx.docachefile:close()
-            os.remove(ngx.ctx.docachefilepath)
+            local success, err = os.remove(ngx.ctx.docachefilepath)
+            if not success then
+                ngx.log(ngx.ERR, "cant remove cache file ", err)
+            end
         end
     end
 end
