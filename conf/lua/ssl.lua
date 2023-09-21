@@ -15,7 +15,7 @@ end
 
 local cert = common.sslinfo(name)
 if not cert then
-    ngx.log(ngx.ERR, "failed to get sslinfo:", name)
+    ngx.log(ngx.INFO, "failed to get sslinfo:", name)
     return ngx.exit(ngx.ERROR)
 end
 

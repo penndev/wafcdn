@@ -224,6 +224,10 @@ end
 -- 调用端口处理缓存目录。
 function M.docache(premature, cacheData)
     local httpc = http.new()
+    if not httpc then
+        ngx.log(ngx.ERR, "http.new return nil")
+        return nil
+    end
     local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/docache", {
         method = "POST",
         body = json.encode({
@@ -238,8 +242,12 @@ function M.docache(premature, cacheData)
             ["Content-Type"] = "application/json",
         }
     })
+    if not res then
+        ngx.log(ngx.ERR, err)
+        return nil
+    end
     if res.status ~= 200 then
-        ngx.log(ngx.ERR, "docache() err:", res.status, res.body, err)
+        ngx.log(ngx.ERR, "status:", res.status,"|body:", res.body)
     end
 end
 
@@ -261,11 +269,11 @@ function M.upcache(premature, file, time)
         }
     })
     if not res then
-        ngx.log(ngx.ERR, "http.request_uri return nil", err)
+        ngx.log(ngx.ERR, err)
         return nil
     end
     if res.status ~= 200 then
-        ngx.log(ngx.ERR, "upcache() err:", res.status, res.body, err)
+        ngx.log(ngx.ERR, "status:", res.status,"|body:", res.body)
     end
 end
 
@@ -281,7 +289,6 @@ function M.redownload(premature, req, cacheMeta)
         ngx.log(ngx.ERR, "http.request_uri return nil", err)
         return nil
     end
-    ngx.log(ngx.INFO, "重新下载文件", req.url, "|status|", res.status)
     if res.status == 200 then
         req.file:seek("set", 0)
         req.file:write(res.body)
@@ -289,6 +296,7 @@ function M.redownload(premature, req, cacheMeta)
         cacheMeta.size = tonumber(res.headers["Content-Length"])
         M.docache(premature, cacheMeta)
     else
+        ngx.log(ngx.INFO, req.url, " cant download | status:", res.status)
         req.file:close()
         local success, err = os.remove(cacheMeta.path)
         if not success then

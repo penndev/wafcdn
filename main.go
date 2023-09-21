@@ -105,16 +105,20 @@ func initCacheData(db string) {
 
 // 处理任务队列
 type CacheTask struct {
-	sync.Mutex
+	mu      sync.Mutex
 	CacheUp map[string]*CacheUp
 	Cache   map[string]*Cache
 }
 
 func (t *CacheTask) InsertCache(c *Cache) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.Cache[c.File] = c
 }
 
 func (t *CacheTask) InsertCacheUp(c *CacheUp) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if item, ok := t.Cache[c.File]; ok {
 		item.Accessed = c.Accessed
 		return
@@ -127,67 +131,65 @@ var cacheTask = CacheTask{
 	Cache:   make(map[string]*Cache),
 }
 
-func initCacheTask(delay time.Duration, rate int) {
+func initCacheTask(cycle time.Duration, diskLimit int) {
 	go func() {
-		ticker := time.NewTicker(delay)
-		for {
-			select {
-			case <-ticker.C:
-				// 下个周期开始前。
-
-				next := time.Now().Add(delay * 2).Unix()
-				// 提交数据更改。
-				cacheTask.Lock()
-				actionCache := cacheTask.Cache
-				actionCacheUp := cacheTask.CacheUp
-				cacheTask.Cache = make(map[string]*Cache)
-				cacheTask.CacheUp = make(map[string]*CacheUp)
-				cacheTask.Unlock()
-				//
-				tx := CacheData.Begin()
-				if tx.Error != nil {
-					log.Println("事务开始失败:", tx.Error)
-					continue
+		ticker := time.NewTicker(cycle)
+		for range ticker.C {
+			next := time.Now().Add(cycle * 2).Unix()
+			// 提交数据更改。
+			cacheTask.mu.Lock()
+			actionCache := cacheTask.Cache
+			actionCacheUp := cacheTask.CacheUp
+			cacheTask.Cache = make(map[string]*Cache)
+			cacheTask.CacheUp = make(map[string]*CacheUp)
+			cacheTask.mu.Unlock()
+			//
+			tx := CacheData.Begin()
+			if tx.Error != nil {
+				log.Println("事务开始失败:", tx.Error)
+				continue
+			}
+			for _, cache := range actionCache {
+				tx.Create(cache)
+			}
+			for file, cacheup := range actionCacheUp {
+				where := &Cache{}
+				where.File = file
+				update := Cache{}
+				update.Accessed = cacheup.Accessed
+				tx.Where(where).Updates(update)
+			}
+			tx.Commit()
+			if tx.Error != nil {
+				log.Println("事务提交失败:", tx.Error)
+				continue
+			}
+			for next >= time.Now().Unix() {
+				// 检查硬盘空间
+				df, err := disk.Usage(os.Getenv("CACHE_DIR"))
+				if err != nil {
+					panic(err)
 				}
-				for _, cache := range actionCache {
-					tx.Create(cache)
-				}
-				for file, cacheup := range actionCacheUp {
-					where := &Cache{}
-					where.File = file
-					update := Cache{}
-					update.Accessed = cacheup.Accessed
-					tx.Where(where).Updates(update)
-				}
-				tx.Commit()
-				if tx.Error != nil {
-					log.Println("事务提交失败:", tx.Error)
-					continue
-				}
-				for next >= time.Now().Unix() {
-					// 检查硬盘空间
-					df, _ := disk.Usage(os.Getenv("CACHE_DIR"))
-					if df.UsedPercent > 90 {
-						// "删除过期的文件，
-						var exprieds []string
-						CacheData.Model(&Cache{}).Select("File").Where("Expried < ?", next).Order("Expried ASC").Limit(1000).Pluck("File", &exprieds)
-						CacheData.Delete(&Cache{}, exprieds)
-						for _, f := range exprieds {
-							os.Remove(f)
-						}
-
-						// lru删除缓存"
-						var accesseds []string
-						CacheData.Model(&Cache{}).Select("File").Order("Accessed ASC").Limit(1000).Pluck("File", &accesseds)
-						CacheData.Delete(&Cache{}, accesseds)
-						for _, f := range accesseds {
-							os.Remove(f)
-						}
-						continue
-					} else {
-						log.Println("硬盘使用进度", df.UsedPercent, next-time.Now().Unix())
-						break
+				if int(df.UsedPercent) > diskLimit {
+					// "删除过期的文件，
+					var exprieds []string
+					CacheData.Model(&Cache{}).Select("File").Where("Expried < ?", next).Order("Expried ASC").Limit(1000).Pluck("File", &exprieds)
+					CacheData.Delete(&Cache{}, exprieds)
+					for _, f := range exprieds {
+						os.Remove(f)
 					}
+
+					// lru删除缓存"
+					var accesseds []string
+					CacheData.Model(&Cache{}).Select("File").Order("Accessed ASC").Limit(1000).Pluck("File", &accesseds)
+					CacheData.Delete(&Cache{}, accesseds)
+					for _, f := range accesseds {
+						os.Remove(f)
+					}
+					continue
+				} else {
+					log.Println("硬盘使用进度", df.UsedPercent, next-time.Now().Unix())
+					break
 				}
 			}
 		}
@@ -292,17 +294,15 @@ func main() {
 	}
 	initDomainConfig(".domain")
 	initCacheData(".cache")
-	cacherate, err := strconv.Atoi(os.Getenv("CACHE_CHECK_RATE"))
-	if err != nil {
-		log.Println("Env get CACHE_CHECK_RATE err", err)
-		cacherate = 90
+	diskLimit, err := strconv.Atoi(os.Getenv("CACHE_DISK_LIMIT"))
+	if err != nil || diskLimit < 30 || diskLimit > 95 {
+		panic("Env get CACHE_DISK_LIMIT err set 30 - 95 %")
 	}
-	cachettl, err := strconv.Atoi(os.Getenv("CACHE_CHECK_TTL"))
-	if err != nil {
-		log.Println("Env get CACHE_CHECK_TTL err", err)
-		cachettl = 60
+	taskCycle, err := strconv.Atoi(os.Getenv("CACHE_TASK_CYCLE"))
+	if err != nil || taskCycle < 30 || taskCycle > 300 {
+		panic("Env get CACHE_TASK_CYCLE err set 30-300 secend")
 	}
-	initCacheTask(time.Second*time.Duration(cachettl), cacherate)
+	initCacheTask(time.Duration(taskCycle)*time.Second, diskLimit)
 	gin.SetMode(os.Getenv("MODE"))
 	initListenServe(os.Getenv("LISTEN"))
 }
