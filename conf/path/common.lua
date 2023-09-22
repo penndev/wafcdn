@@ -227,12 +227,12 @@ function M.hostinfo(host)
     end
 end
 
-function M.contentType(type)
-    if type == "ts" then
-        return "video/mp2t"
-    end
-    return nil
-end
+-- function M.contentType(type)
+--     if type == "ts" then
+--         return "video/mp2t"
+--     end
+--     return nil
+-- end
 
 -- 计算路径的md5路径
 function M.md5path(uri)

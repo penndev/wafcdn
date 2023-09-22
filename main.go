@@ -131,8 +131,17 @@ var cacheTask = CacheTask{
 	Cache:   make(map[string]*Cache),
 }
 
-func initCacheTask(cycle time.Duration, diskLimit int) {
+func initCacheTask() {
+	diskLimit, err := strconv.Atoi(os.Getenv("CACHE_DISK_LIMIT"))
+	if err != nil || diskLimit < 30 || diskLimit > 95 {
+		panic("Env get CACHE_DISK_LIMIT err set 30 - 95 %")
+	}
+	taskCycle, err := strconv.Atoi(os.Getenv("CACHE_TASK_CYCLE"))
+	if err != nil || taskCycle < 30 || taskCycle > 300 {
+		panic("Env get CACHE_TASK_CYCLE err set 30-300 secend")
+	}
 	go func() {
+		cycle := time.Duration(taskCycle) * time.Second
 		ticker := time.NewTicker(cycle)
 		for range ticker.C {
 			next := time.Now().Add(cycle * 2).Unix()
@@ -197,6 +206,32 @@ func initCacheTask(cycle time.Duration, diskLimit int) {
 
 }
 
+var netTrafficSend int
+var netTrafficRecv int
+
+func initNetTraffic() {
+	_, err := net.IOCounters(false)
+	if err != nil {
+		panic(err)
+	}
+	var lastSend uint64
+	var lastRecv uint64
+	go func() {
+		for {
+			// 获取所有网络接口的输入和输出计数器信息
+			counters, _ := net.IOCounters(false)
+			// 遍历每个网络接口并计算流量变化
+			for _, counter := range counters {
+				netTrafficSend = int(counter.BytesSent - lastSend)
+				netTrafficRecv = int(counter.BytesRecv - lastRecv)
+				lastSend = counter.BytesSent
+				lastRecv = counter.BytesRecv
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+}
+
 // 对nginx提供接口
 // -
 func handleGetSSL(c *gin.Context) {
@@ -250,22 +285,66 @@ func handleUpCache(c *gin.Context) {
 	cacheTask.InsertCacheUp(&cacheUp)
 	c.Status(200)
 }
-
 func handleRemoteStat(c *gin.Context) {
-	m, _ := mem.VirtualMemory()
-	u, _ := cpu.Percent(0, false)
-	d, _ := disk.Usage(os.Getenv("CACHE_DIR"))
-	i, _ := disk.IOCounters()
-	n, _ := net.IOCounters(false)
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		c.JSON(500, gin.H{
+			"err": err,
+			"msg": "cant get memory!",
+		})
+		return
+	}
+	cpuCounts, err := cpu.Counts(true)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"err": err,
+			"msg": "cant get cpuPercent!",
+		})
+		return
+	}
+	cpuPercent, err := cpu.Percent(0, false)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"err": err,
+			"msg": "cant get cpuPercent!",
+		})
+		return
+	}
+	diskInfo, _ := disk.Usage(os.Getenv("CACHE_DIR"))
+	if err != nil {
+		c.JSON(500, gin.H{
+			"err": err,
+			"msg": "cant get disk.Usage!",
+		})
+		return
+	}
+	var filetotal int64
+	CacheData.Model(&Cache{}).Count(&filetotal)
+	var filetoday int64
+	CacheData.Model(&Cache{}).Where("created_at > ?", time.Now().Format("2006-01-02 00:00:00")).Count(&filetoday)
 	c.JSON(200, gin.H{
-		"mem": m,
-		"cpu": u,
-		"df":  d,
-		"io":  i,
-		"net": n,
+		"memory": gin.H{
+			"total": memory.Total,
+			"used":  memory.Used,
+		},
+		"cpu": gin.H{
+			"percent": cpuPercent[0],
+			"count":   cpuCounts,
+		},
+		"disk": gin.H{
+			"total": diskInfo.Total,
+			"used":  diskInfo.Used,
+		},
+		"file": gin.H{
+			"total": filetotal,
+			"today": filetoday,
+		},
+		"traffic": gin.H{
+			"send": netTrafficSend,
+			"recv": netTrafficRecv,
+		},
 	})
 }
-
 func initListenServe(addr string) {
 	route := gin.Default()
 	socks := route.Group("/socket")
@@ -292,17 +371,13 @@ func main() {
 	if err != nil {
 		log.Fatal("Error loading .env file", err)
 	}
+	// 初始化数据
 	initDomainConfig(".domain")
 	initCacheData(".cache")
-	diskLimit, err := strconv.Atoi(os.Getenv("CACHE_DISK_LIMIT"))
-	if err != nil || diskLimit < 30 || diskLimit > 95 {
-		panic("Env get CACHE_DISK_LIMIT err set 30 - 95 %")
-	}
-	taskCycle, err := strconv.Atoi(os.Getenv("CACHE_TASK_CYCLE"))
-	if err != nil || taskCycle < 30 || taskCycle > 300 {
-		panic("Env get CACHE_TASK_CYCLE err set 30-300 secend")
-	}
-	initCacheTask(time.Duration(taskCycle)*time.Second, diskLimit)
+	// 后台定时任务
+	initCacheTask()
+	initNetTraffic()
+	// web 接口
 	gin.SetMode(os.Getenv("MODE"))
 	initListenServe(os.Getenv("LISTEN"))
 }
