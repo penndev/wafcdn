@@ -25,8 +25,31 @@ end
 local lfs = require("lfs")
 local http = require("http")
 local json = require("cjson")
+local lock = require("resty.lock")
 
 local __getSocketSSL = function(premature, host)
+    local my_lock = lock:new("ssl_lock")
+    if not my_lock then
+        ngx.log(ngx.ERR, "cant create ssl_lock ")
+        return
+    end
+
+    local ok, err = my_lock:lock(host)
+    if not ok then
+        ngx.log(ngx.ERR, "cant lock ssl_lock ", err)
+        return
+    end
+    -- 是否有人获取了结果已经，如果有，我是缓存的等待者。
+    local value, _ = ngx.shared.ssl:get(host)
+    if value then
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock ssl_lock: ", err)
+        end
+        local crt, key = tostring(value):match("(.-)%$(.+)")
+        return { crt = crt, key = key }
+    end
+    -- 强制限制避免回源失败的缓存穿透
     local success, err, forcible = ngx.shared.ssl_lock:add(host .. ".lock", true, __sharedTime)
     if err and err ~= "exists" then
         ngx.log(ngx.ERR, "ngx.shared.ssl_lock err:", err)
@@ -35,22 +58,38 @@ local __getSocketSSL = function(premature, host)
         ngx.log(ngx.ERR, "ngx.shared.ssl_lock no memory")
     end
     if not success then
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock ssl_lock: ", err)
+        end
         return nil
     end
+    -- 没有人获取结果，那么我就是缓存的执行者
     local httpc = http.new()
+    if not httpc then
+        ngx.log(ngx.ERR, "http.new return nil")
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock ssl_lock: ", err)
+        end
+        return nil
+    end
     local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/ssl?host=" .. host)
-    if err then
+    if not res then
         ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", err)
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock ssl_lock: ", err)
+        end
         return
     end
-    if res and res.status == 200 then
+    if res.status == 200 then
         local certbase64, err = json.decode(res.body)
         if err then
             ngx.log(ngx.ERR, "sslinfo cjson decode err", err)
         end
         local crt = ngx.decode_base64(certbase64.crt)
         local key = ngx.decode_base64(certbase64.key)
-
         local success, err, forcible = ngx.shared.ssl:set(host, crt .. "$" .. key, __sharedTime)
         if err or not success then
             ngx.log(ngx.ERR, "ngx.shared.ssl set err:", err)
@@ -58,9 +97,17 @@ local __getSocketSSL = function(premature, host)
         if forcible then
             ngx.log(ngx.ERR, "ngx.shared.ssl no memory")
         end
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock ssl_lock: ", err)
+        end
         return { crt = crt, key = key }
     else
-        ngx.log(ngx.ERR, "__getSocketSSL() request_uri err:", res.status, res.body)
+        ngx.log(ngx.INFO, "status:", res.status, "|body:", res.body)
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock ssl_lock: ", err)
+        end
     end
 end
 
@@ -73,7 +120,7 @@ function M.sslinfo(host)
             local ok, err = ngx.timer.at(0, __getSocketSSL, host)
             if not ok then ngx.log(ngx.ERR, "sslinfo() cont create ngx.timer err:", err) end
         end
-        local crt, key = value:match("(.-)%$(.+)")
+        local crt, key = tostring(value):match("(.-)%$(.+)")
         return { crt = crt, key = key }
     else --完全不存在.
         return __getSocketSSL(0, host)
@@ -81,25 +128,61 @@ function M.sslinfo(host)
 end
 
 local __getSocketDomain = function(premature, host)
-    -- 增加请求锁，避免耗尽资源 - 延后锁写法。会有问题换一种不遗漏的写法。
-    local success, err, forcible = ngx.shared.domain_lock:add(host .. "_lock", true, __sharedTime)
-    if err and err ~= "exists" then -- 有异常情况。
-        ngx.log(ngx.ERR, "ngx.shared.domain_lock err", err)
-    end
-    if forcible then
-        ngx.log(ngx.ERR, "ngx.shared.domain_lock no memory")
-    end
-    if not success then
-        return nil
-    end
-    -- 获取域名配置信息
-    local httpc = http.new()
-    local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/domain?host=" .. host)
-    if err then
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", err)
+    local my_lock = lock:new("domain_lock")
+    if not my_lock then
+        ngx.log(ngx.ERR, "cant create domain_lock ")
         return
     end
-    if res and res.status == 200 then
+
+    local elapsed, err = my_lock:lock(host)
+    if not elapsed then
+        ngx.log(ngx.ERR, "cant lock domain_lock ", err)
+        return
+    end
+    -- 锁的等待者执行。
+    local value, _ = ngx.shared.domain:get(host)
+    if value then
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock domain_lock: ", err)
+        end
+        return value
+    end
+    -- 强制限制避免回源失败的缓存穿透
+    local success, err, forcible = ngx.shared.domain:add(host .. ".lock", true, __sharedTime)
+    if err and err ~= "exists" then
+        ngx.log(ngx.ERR, "ngx.shared.domain err:", err)
+    end
+    if forcible then
+        ngx.log(ngx.ERR, "ngx.shared.domain no memory")
+    end
+    if not success then
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock domain: ", err)
+        end
+        return nil
+    end
+    -- 再次后台获取
+    local httpc = http.new()
+    if not httpc then
+        ngx.log(ngx.ERR, "http.new return nil")
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock domain_lock: ", err)
+        end
+        return nil
+    end
+    local res, err = httpc:request_uri(M.getenv("SOCKET_API") .. "/socket/domain?host=" .. host)
+    if not res then
+        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", err)
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock domain_lock: ", err)
+        end
+        return nil
+    end
+    if res.status == 200 then
         local success, err, forcible = ngx.shared.domain:set(host, res.body, __sharedTime)
         if err or not success then
             ngx.log(ngx.ERR, "ngx.shared.domain set err", err)
@@ -107,9 +190,17 @@ local __getSocketDomain = function(premature, host)
         if forcible then
             ngx.log(ngx.ERR, "ngx.shared.domain_lock no memory")
         end
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock domain_lock: ", err)
+        end
         return res.body
     else
-        ngx.log(ngx.ERR, "__getSocketDomain() request_uri err:", res.status, res.body)
+        ngx.log(ngx.ERR, "status:", res.status, "|body:", res.body)
+        local ok, err = my_lock:unlock()
+        if not ok then
+            ngx.log(ngx.ERR, "cant unlock domain_lock: ", err)
+        end
     end
 end
 
@@ -122,17 +213,13 @@ function M.hostinfo(host)
             local ok, err = ngx.timer.at(0, __getSocketDomain, host)
             if not ok then ngx.log(ngx.ERR, "hostinfo() cont create ngx.timer err:", err) end
         end
-        local config, err = json.decode(value)
-        if err then
-            ngx.log(ngx.ERR, "hostinfo() cjson decode err", err)
-        end
-        return config
+        return json.decode(tostring(value))
     else
         local value = __getSocketDomain(0, host)
         if not value then
             return nil
         end
-        local config, err = json.decode(value)
+        local config, err = json.decode(tostring(value))
         if err then
             ngx.log(ngx.ERR, "hostinfo() cjson decode err", err)
         end
@@ -175,22 +262,6 @@ function M.mkdir(path)
         end
     end
     return res
-
-
-    -- if not res then
-
-    --     local parent, count = path:gsub("/[^/]+/$", "/")
-    --     if count ~= 1 then
-    --         ngx.log(ngx.ERR, "创建文件夹失败[" .. path .. "]", parent, err)
-    --         return nil
-    --     end
-    --     if M.mkdir(parent) then
-    --         local res, err = lfs.mkdir(path)
-    --         if err ~= nil then ngx.log(ngx.ERR, "创建文件夹失败[" .. path .. "]", err) end
-    --         return res
-    --     end
-    -- end
-    -- return res
 end
 
 -- 验证缓存是否过期
@@ -247,7 +318,7 @@ function M.docache(premature, cacheData)
         return nil
     end
     if res.status ~= 200 then
-        ngx.log(ngx.ERR, "status:", res.status,"|body:", res.body)
+        ngx.log(ngx.ERR, "status:", res.status, "|body:", res.body)
     end
 end
 
@@ -273,7 +344,7 @@ function M.upcache(premature, file, time)
         return nil
     end
     if res.status ~= 200 then
-        ngx.log(ngx.ERR, "status:", res.status,"|body:", res.body)
+        ngx.log(ngx.ERR, "status:", res.status, "|body:", res.body)
     end
 end
 
@@ -296,7 +367,7 @@ function M.redownload(premature, req, cacheMeta)
         cacheMeta.size = tonumber(res.headers["Content-Length"])
         M.docache(premature, cacheMeta)
     else
-        ngx.log(ngx.INFO, req.url, " cant download | status:", res.status)
+        ngx.log(ngx.ERR, req.url, " cant download | status:", res.status)
         req.file:close()
         local success, err = os.remove(cacheMeta.path)
         if not success then
