@@ -1,6 +1,6 @@
 local init = require("init")
 local http = require("http")
-local json = require("json")
+local json = require("cjson")
 
 local upcacheurl = init.socketapi .. "/socket/upcache"
 
@@ -36,7 +36,7 @@ local function access()
 end
 
 local function header()
-    if ngx.ctx.backend.resp_header then
+    if ngx.ctx.backend and ngx.ctx.backend.resp_header then
         for _, headeritem in ipairs(ngx.ctx.backend.resp_header) do
             if headeritem.name and headeritem.value then
                 ngx.header[headeritem.name] = headeritem.value

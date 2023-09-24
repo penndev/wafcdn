@@ -120,7 +120,7 @@ end
 
 
 -- 验证缓存是否过期
----@param path string 文件路径, 
+---@param path string 文件路径
 ---@param expired number 缓存时间
 ---@return boolean val 是否有效
 local function cachevalid(path, expired)

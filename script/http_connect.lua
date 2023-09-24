@@ -111,7 +111,6 @@ local function connect(self, options)
         if proxy.no_proxy == "*" then
             -- all hosts are excluded
             proxy = nil
-
         else
             local host = request_host
             local no_proxy_set = {}
@@ -154,7 +153,7 @@ local function connect(self, options)
         local proxy_scheme = proxy_uri_t[1]
         if proxy_scheme ~= "http" then
             return nil, "protocol " .. tostring(proxy_scheme) ..
-                        " not supported for proxy connections"
+                " not supported for proxy connections"
         end
         proxy_host = proxy_uri_t[2]
         proxy_port = proxy_uri_t[3]
@@ -163,13 +162,13 @@ local function connect(self, options)
     -- construct a poolname unique within proxy and ssl info
     if not poolname then
         poolname = (request_scheme or "")
-                   .. ":" .. request_host
-                   .. ":" .. tostring(request_port)
-                   .. ":" .. tostring(ssl)
-                   .. ":" .. (ssl_server_name or "")
-                   .. ":" .. tostring(ssl_verify)
-                   .. ":" .. (proxy_uri or "")
-                   .. ":" .. (request_scheme == "https" and proxy_authorization or "")
+            .. ":" .. request_host
+            .. ":" .. tostring(request_port)
+            .. ":" .. tostring(ssl)
+            .. ":" .. (ssl_server_name or "")
+            .. ":" .. tostring(ssl_verify)
+            .. ":" .. (proxy_uri or "")
+            .. ":" .. (request_scheme == "https" and proxy_authorization or "")
         -- in the above we only add the 'proxy_authorization' as part of the poolname
         -- when the request is https. Because in that case the CONNECT request (which
         -- carries the authorization header) is part of the connect procedure, whereas
@@ -183,8 +182,8 @@ local function connect(self, options)
         ok, err = sock:connect(proxy_host, proxy_port, tcp_opts)
         if not ok then
             return nil, "failed to connect to: " .. (proxy_host or "") ..
-                        ":" .. (proxy_port or "") ..
-                        ": ", err
+                ":" .. (proxy_port or "") ..
+                ": ", err
         end
 
         if ssl and sock:getreusedtimes() == 0 then
@@ -211,14 +210,12 @@ local function connect(self, options)
                 return nil, "failed to establish a tunnel through a proxy: " .. res.status
             end
         end
-
     elseif not request_port then
         -- non-proxy, without port -> unix domain socket
         ok, err = sock:connect(request_host, tcp_opts)
         if not ok then
             return nil, err
         end
-
     else
         -- non-proxy, regular network tcp
         ok, err = sock:connect(request_host, request_port, tcp_opts)
@@ -230,18 +227,16 @@ local function connect(self, options)
     local ssl_session
     -- Now do the ssl handshake
     if ssl and sock:getreusedtimes() == 0 then
-
         -- Experimental mTLS support
         if ssl_client_cert and ssl_client_priv_key then
-          if type(sock.setclientcert) ~= "function" then
-            ngx_log(ngx_WARN, "cannot use SSL client cert and key without mTLS support")
-
-          else
-            ok, err = sock:setclientcert(ssl_client_cert, ssl_client_priv_key)
-            if not ok then
-              ngx_log(ngx_WARN, "could not set client certificate: ", err)
+            if type(sock.setclientcert) ~= "function" then
+                ngx_log(ngx_WARN, "cannot use SSL client cert and key without mTLS support")
+            else
+                ok, err = sock:setclientcert(ssl_client_cert, ssl_client_priv_key)
+                if not ok then
+                    ngx_log(ngx_WARN, "could not set client certificate: ", err)
+                end
             end
-          end
         end
 
         ssl_session, err = sock:sslhandshake(ssl_reused_session, ssl_server_name, ssl_verify, ssl_send_status_req)

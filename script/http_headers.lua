@@ -40,5 +40,4 @@ function _M.new()
     return setmetatable({}, mt)
 end
 
-
 return _M
