@@ -159,14 +159,15 @@ func initCacheTask() {
 				continue
 			}
 			for _, cache := range actionCache {
-				tx.Create(cache)
+				if err := tx.Create(cache).Error; err != nil {
+					tx.Updates(cache)
+				}
 			}
 			for file, cacheup := range actionCacheUp {
-				where := &Cache{}
-				where.File = file
-				update := Cache{}
-				update.Accessed = cacheup.Accessed
-				tx.Where(where).Updates(update)
+				up := &Cache{}
+				up.File = file
+				up.Accessed = cacheup.Accessed
+				tx.Save(up)
 			}
 			tx.Commit()
 			if tx.Error != nil {
@@ -203,7 +204,6 @@ func initCacheTask() {
 			}
 		}
 	}()
-
 }
 
 var netTrafficSend int
@@ -252,11 +252,30 @@ func handleGetSSL(c *gin.Context) {
 func handleGetDomain(c *gin.Context) {
 	host := c.Query("host")
 	if host != "" {
+		// 判断是否全速缓存。
+		df, err := disk.Usage(os.Getenv("CACHE_DIR"))
+		if err != nil {
+			panic(err)
+		}
+
+		docacheCount := 1
+		docacheLimit, err := strconv.Atoi(os.Getenv("DOCACHE_LIMIT_STSRT"))
+		if err != nil {
+			panic(err)
+		}
+		if int(df.UsedPercent) > docacheLimit {
+			docacheCount, err = strconv.Atoi(os.Getenv("DOCACHE_LIMIT_COUNT"))
+			if err != nil {
+				panic(err)
+			}
+		}
+
 		if item, ok := DomainInfoMap[host]; ok {
 			c.JSON(200, gin.H{
-				"identity": item.Identity,
-				"backend":  item.Backend,
-				"cache":    item.Cache,
+				"identity":     item.Identity,
+				"backend":      item.Backend,
+				"cache":        item.Cache,
+				"docachelimit": docacheCount,
 			})
 			return
 		}

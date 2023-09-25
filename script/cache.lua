@@ -3,8 +3,17 @@ local http = require("http")
 local json = require("cjson")
 
 local upcacheurl = init.socketapi .. "/socket/upcache"
+local sharedttl = init.sharedttl
+local upcachelimit = init.upcachelimit
 
 local socketClient = function(premature, data)
+    -- 做UPCACHE_LIMIT_COUNT限制。
+    local value, err = ngx.shared.upcache_lock:incr(data.File, 1, 0, sharedttl)
+    if value < upcachelimit then
+        return
+    end
+    ngx.shared.upcache_lock:delete(data.File)
+    -- 通知后台调整缓存热度。
     local httpc = http.new()
     if not httpc then
         ngx.log(ngx.ERR, "http.new return nil")

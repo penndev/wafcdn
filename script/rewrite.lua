@@ -28,7 +28,7 @@ local socketClient = function(_, host)
         if not ok then
             ngx.log(ngx.ERR, "cant unlock domain_lock:", err)
         end
-        return value
+        return tostring(value)
     end
     -- 强制限制避免回源失败的缓存穿透
     local sharedsuccess, sharederr, sharedforcible = ngx.shared.domain:add(host .. ".lock", true, sharedttl)
@@ -135,17 +135,22 @@ local function cachevalid(path, expired)
 end
 
 -- 验证是否进行缓存行为 + 锁
----@param path string 文件路径,
+---@param path string 文件路径
+---@param limit number 触发下载的要求
 ---@return boolean ok 是否执行缓存
-local function cachelock(path)
-    local success, err, forcible = ngx.shared.cache_lock:add(path, true, sharedttl)
+local function cachelock(path, limit)
+    local value, err, forcible = ngx.shared.cache_lock:incr(path, 1, 0, sharedttl)
     if forcible then
         ngx.log(ngx.ERR, "ngx.shared.cache_lock no memory")
     end
-    if err and err ~= "exists" then
-        ngx.log(ngx.ERR, "ngx.shared.cache_lock err", err)
+    if not value then
+        ngx.log(ngx.ERR, err)
+        return false
     end
-    return success
+    if value == limit then
+        return true
+    end
+    return false
 end
 
 local function setup()
@@ -177,7 +182,7 @@ local function setup()
                 ngx.req.set_uri("/@cache", true)
                 return
             end
-            if cachelock(doCacheFilePath) then -- 给缓存行为加锁
+            if cachelock(doCacheFilePath, config.docachelimit) then -- 给缓存行为加锁
                 ngx.ctx.docache = true
                 ngx.ctx.docachefilepath = doCacheFilePath
                 ngx.ctx.docachetime = doCacheTime

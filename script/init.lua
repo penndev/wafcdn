@@ -23,6 +23,11 @@ if not cachedir then
     error("cant get env CACHE_DIR")
 end
 
+local upcachelimit = tonumber(util.getenv("UPCACHE_LIMIT_COUNT"))
+if not upcachelimit then
+    error("cant get env UPCACHE_LIMIT_COUNT")
+end
+
 ---设置没有缓存配置的处理hook
 local function setNotFoundDomain()
     ngx.status = 403
@@ -34,6 +39,8 @@ return {
     sharedttl = sharedttl,
     socketapi = socketapi,
     cachedir = cachedir,
+    upcachelimit = upcachelimit,
+
     setNotFoundDomain = setNotFoundDomain,
     serverFlagDocache = "wafcnd#docache",
     serverFlagBackend = "wafcnd#backend",
