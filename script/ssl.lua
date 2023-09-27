@@ -109,7 +109,7 @@ end
 local function setup()
     local hostname, hostnameerr = ssl.server_name()
     if not hostname then
-        ngx.log(ngx.ERR, "failed to get server_name certificates:", hostnameerr)
+        ngx.log(ngx.INFO, "failed to get server_name certificates:", hostnameerr)
         return ngx.exit(ngx.ERROR)
     end
 

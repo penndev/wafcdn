@@ -10,9 +10,8 @@ import (
 	"sync"
 	"time"
 
-	// "gorm.io/driver/sqlite"
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite" // 更兼容
+	"github.com/glebarez/sqlite"
 	"github.com/joho/godotenv"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -167,7 +166,8 @@ func initCacheTask() {
 				up := &Cache{}
 				up.File = file
 				up.Accessed = cacheup.Accessed
-				tx.Save(up)
+				tx.Updates(up)
+				// 判断是否修改成功。避免清空其他数据。
 			}
 			tx.Commit()
 			if tx.Error != nil {

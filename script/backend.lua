@@ -86,7 +86,7 @@ local downloadClient = function(premature, req, cacheMeta)
         cacheMeta.size = tonumber(res.headers["Content-Length"])
         socketClient(premature, cacheMeta)
     else
-        ngx.log(ngx.ERR, req.url, " cant download | status:", res.status)
+        ngx.log(ngx.INFO, req.url, " cant download | status:", res.status)
         req.file:close()
         local success, err = os.remove(cacheMeta.path)
         if not success then
