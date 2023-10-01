@@ -25,6 +25,7 @@ func Listen() {
 			panic(err)
 		}
 		gin.DefaultErrorWriter = logFile
+		log.SetOutput(logFile)
 		// 日志文件如何处理呢？r.Use(gin.Logger())
 		r.Use(gin.Recovery())
 	} else {

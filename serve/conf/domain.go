@@ -13,14 +13,19 @@ var DomainVersion struct {
 }
 
 type DomainItem struct {
-	Identity string `json:"identity"`
-	Domain   string `json:"domain"`
-	Port     int    `json:"port"`
-	SSL      struct {
+	Domain string `json:"domain"`
+	Port   int    `json:"port"`
+	SSL    struct {
 		Port int    `json:"port"`
 		Crt  string `json:"crt"`
 		Key  string `json:"key"`
 	} `json:"ssl"`
+	Security struct {
+		Status      bool `json:"status"`
+		QPS         int  `json:"qps"`
+		IPWhiteList string
+		IPBlackList string
+	} `json:"security"`
 	Backend struct {
 		URL       string `json:"url"`
 		Host      string `json:"host"`
@@ -33,9 +38,12 @@ type DomainItem struct {
 			Value string `json:"value"`
 		} `json:"resp_header"`
 	} `json:"backend"`
-	Cache []struct {
-		Path string `json:"path"` // 注意这里是 "path" 而不是 "paht"
-		Time int    `json:"time"`
+	Cache struct {
+		Dir  string `json:"dir"`
+		Rule []struct {
+			Path string `json:"path"` // 注意这里是 "path" 而不是 "paht"
+			Time int    `json:"time"`
+		} `json:"rule"`
 	} `json:"cache"`
 }
 

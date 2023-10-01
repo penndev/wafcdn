@@ -8,7 +8,7 @@ import (
 
 func main() {
 	conf.LoadEnv(".env")
-	conf.LoadDomain(".domain")
-	orm.LoadCache(".cache")
+	conf.LoadDomain(".domain.json")
+	orm.LoadCache(".cache.db")
 	serve.Listen()
 }

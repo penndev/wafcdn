@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"sync"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -34,12 +35,20 @@ func LoadCache(db string) {
 	}
 }
 
-// // 处理任务队列
-// type CacheTask struct {
-// 	mu      sync.Mutex
-// 	CacheUp map[string]*CacheUp
-// 	Cache   map[string]*Cache
-// }
+// 处理批量任务队列
+type cacheTask struct {
+	sync.RWMutex
+	CacheUp map[string]*CacheUp
+	Cache   map[string]*Cache
+}
+
+func InCacheDo(c *Cache) {
+
+}
+
+func InCacheUp(c *CacheUp) {
+
+}
 
 // func (t *CacheTask) InsertCache(c *Cache) {
 // 	t.mu.Lock()
