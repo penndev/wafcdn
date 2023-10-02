@@ -1,11 +1,16 @@
 package orm
 
 import (
+	"log"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/penndev/wafcdn/serve/util"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
@@ -24,8 +29,22 @@ type Cache struct {
 }
 
 func LoadCache(db string) {
+	var gormConfig = &gorm.Config{}
+	if os.Getenv("MODE") != "dev" {
+		logFile, err := os.OpenFile("logs/gorm.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			panic(err)
+		}
+		gormConfig.Logger = logger.New(log.New(logFile, "\r\n", log.LstdFlags), logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logger.Warn,
+			IgnoreRecordNotFoundError: false,
+			Colorful:                  true,
+		})
+	}
+
 	var err error
-	DB, err = gorm.Open(sqlite.Open(db), &gorm.Config{})
+	DB, err = gorm.Open(sqlite.Open(db), gormConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -36,113 +55,99 @@ func LoadCache(db string) {
 }
 
 // 处理批量任务队列
-type cacheTask struct {
-	sync.RWMutex
-	CacheUp map[string]*CacheUp
+var cacheTask struct {
+	sync.Mutex
 	Cache   map[string]*Cache
+	CacheUp map[string]*CacheUp
 }
 
 func InCacheDo(c *Cache) {
-
+	cacheTask.Lock()
+	defer cacheTask.Unlock()
+	cacheTask.Cache[c.File] = c
 }
 
 func InCacheUp(c *CacheUp) {
-
+	cacheTask.Lock()
+	defer cacheTask.Unlock()
+	cacheTask.CacheUp[c.File] = c
 }
 
-// func (t *CacheTask) InsertCache(c *Cache) {
-// 	t.mu.Lock()
-// 	defer t.mu.Unlock()
-// 	t.Cache[c.File] = c
-// }
+func CacheInAndLruOutTask() {
+	cacheTask.Cache = make(map[string]*Cache)
+	cacheTask.CacheUp = make(map[string]*CacheUp)
+	// 定时任务。
+	diskLimit, err := strconv.Atoi(os.Getenv("CACHE_DISK_LIMIT"))
+	if err != nil || diskLimit < 30 || diskLimit > 95 {
+		panic("Env get CACHE_DISK_LIMIT err set 30 - 95 %")
+	}
+	taskCycle, err := strconv.Atoi(os.Getenv("CACHE_TASK_CYCLE"))
+	if err != nil || taskCycle < 30 || taskCycle > 300 {
+		panic("Env get CACHE_TASK_CYCLE err set 30-300 secend")
+	}
+	// 应该这里for 然后 recovery 错误并记录日志。
+	go handleLru(taskCycle, diskLimit)
+}
 
-// func (t *CacheTask) InsertCacheUp(c *CacheUp) {
-// 	t.mu.Lock()
-// 	defer t.mu.Unlock()
-// 	if item, ok := t.Cache[c.File]; ok {
-// 		item.Accessed = c.Accessed
-// 		return
-// 	}
-// 	t.CacheUp[c.File] = c
-// }
-
-// var cacheTask = CacheTask{
-// 	CacheUp: make(map[string]*CacheUp),
-// 	Cache:   make(map[string]*Cache),
-// }
-
-// func initCacheTask() {
-// 	diskLimit, err := strconv.Atoi(os.Getenv("CACHE_DISK_LIMIT"))
-// 	if err != nil || diskLimit < 30 || diskLimit > 95 {
-// 		panic("Env get CACHE_DISK_LIMIT err set 30 - 95 %")
-// 	}
-// 	taskCycle, err := strconv.Atoi(os.Getenv("CACHE_TASK_CYCLE"))
-// 	if err != nil || taskCycle < 30 || taskCycle > 300 {
-// 		panic("Env get CACHE_TASK_CYCLE err set 30-300 secend")
-// 	}
-// 	go func() {
-// 		cycle := time.Duration(taskCycle) * time.Second
-// 		ticker := time.NewTicker(cycle)
-// 		for range ticker.C {
-// 			next := time.Now().Add(cycle * 2).Unix()
-// 			// 提交数据更改。
-// 			cacheTask.mu.Lock()
-// 			actionCache := cacheTask.Cache
-// 			actionCacheUp := cacheTask.CacheUp
-// 			cacheTask.Cache = make(map[string]*Cache)
-// 			cacheTask.CacheUp = make(map[string]*CacheUp)
-// 			cacheTask.mu.Unlock()
-// 			//
-// 			tx := CacheData.Begin()
-// 			if tx.Error != nil {
-// 				log.Println("事务开始失败:", tx.Error)
-// 				continue
-// 			}
-// 			for _, cache := range actionCache {
-// 				if err := tx.Create(cache).Error; err != nil {
-// 					tx.Updates(cache)
-// 				}
-// 			}
-// 			for file, cacheup := range actionCacheUp {
-// 				up := &Cache{}
-// 				up.File = file
-// 				up.Accessed = cacheup.Accessed
-// 				tx.Updates(up)
-// 				// 判断是否修改成功。避免清空其他数据。
-// 			}
-// 			tx.Commit()
-// 			if tx.Error != nil {
-// 				log.Println("事务提交失败:", tx.Error)
-// 				continue
-// 			}
-// 			for next >= time.Now().Unix() {
-// 				// 检查硬盘空间
-// 				df, err := disk.Usage(os.Getenv("CACHE_DIR"))
-// 				if err != nil {
-// 					panic(err)
-// 				}
-// 				if int(df.UsedPercent) > diskLimit {
-// 					// "删除过期的文件，
-// 					var exprieds []string
-// 					CacheData.Model(&Cache{}).Select("File").Where("Expried < ?", next).Order("Expried ASC").Limit(1000).Pluck("File", &exprieds)
-// 					CacheData.Delete(&Cache{}, exprieds)
-// 					for _, f := range exprieds {
-// 						os.Remove(f)
-// 					}
-
-// 					// lru删除缓存"
-// 					var accesseds []string
-// 					CacheData.Model(&Cache{}).Select("File").Order("Accessed ASC").Limit(1000).Pluck("File", &accesseds)
-// 					CacheData.Delete(&Cache{}, accesseds)
-// 					for _, f := range accesseds {
-// 						os.Remove(f)
-// 					}
-// 					continue
-// 				} else {
-// 					log.Println("硬盘使用进度", df.UsedPercent, next-time.Now().Unix())
-// 					break
-// 				}
-// 			}
-// 		}
-// 	}()
-// }
+func handleLru(taskCycle, diskLimit int) {
+	cycle := time.Duration(taskCycle) * time.Second
+	ticker := time.NewTicker(cycle)
+	for range ticker.C {
+		next := time.Now().Add(cycle * 2).Unix()
+		// 快速的处理数据。
+		cacheTask.Lock()
+		actionCache := cacheTask.Cache
+		actionCacheUp := cacheTask.CacheUp
+		cacheTask.Cache = make(map[string]*Cache)
+		cacheTask.CacheUp = make(map[string]*CacheUp)
+		cacheTask.Unlock()
+		// 开始事务处理
+		tx := DB.Begin()
+		if tx.Error != nil {
+			log.Println("事务开始失败:", tx.Error)
+			continue
+		}
+		// 插入数据，已存在则更新。
+		for _, cache := range actionCache {
+			if err := tx.Create(cache).Error; err != nil {
+				tx.Updates(cache)
+			}
+		}
+		if tx.Commit(); tx.Error != nil {
+			log.Println("事务提交失败:", tx.Error)
+			continue
+		}
+		// 处理lru信息。
+		for _, cacheup := range actionCacheUp {
+			tx.Model(&Cache{}).Where("file = ?", cacheup.File).Update("accessed", cacheup.Accessed)
+		}
+		if tx.Commit(); tx.Error != nil {
+			log.Println("事务提交失败:", tx.Error)
+			continue
+		}
+		// 删除lru数据。
+		for next >= time.Now().Unix() {
+			// 是否需要出栈
+			if util.DiskUsePercent() > diskLimit {
+				// 删除过期的文件
+				var exprieds []string
+				DB.Model(&Cache{}).Select("File").Where("Expried < ?", next).Order("Expried ASC").Limit(1000).Pluck("File", &exprieds)
+				DB.Delete(&Cache{}, exprieds)
+				for _, f := range exprieds {
+					os.Remove(f)
+				}
+				// lru 删除未过期的文件
+				var accesseds []string
+				DB.Model(&Cache{}).Select("File").Order("Accessed ASC").Limit(1000).Pluck("File", &accesseds)
+				DB.Delete(&Cache{}, accesseds)
+				for _, f := range accesseds {
+					os.Remove(f)
+				}
+				continue
+			} else {
+				break
+			}
+		}
+		log.Println("CacheTask->", next-time.Now().Unix())
+	}
+}

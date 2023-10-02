@@ -20,7 +20,7 @@ func Listen() {
 	// 记录日志与错误恢复。
 	r := gin.New()
 	if gin.Mode() == gin.ReleaseMode { //正式环境。
-		logFile, err := os.Open("logs/serve_error.log")
+		logFile, err := os.OpenFile("logs/gin.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			panic(err)
 		}
