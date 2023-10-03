@@ -42,7 +42,7 @@ return {
     upcachelimit = upcachelimit,
 
     setNotFoundDomain = setNotFoundDomain,
-    serverFlagDocache = "wafcnd#docache",
-    serverFlagBackend = "wafcnd#backend",
-    serverFlagCache = "wafcnd#cache",
+    serverFlagDocache = "wafcdn#docache",
+    serverFlagBackend = "wafcdn#backend",
+    serverFlagCache = "wafcdn#cache",
 }

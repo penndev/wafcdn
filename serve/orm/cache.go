@@ -70,6 +70,10 @@ func InCacheDo(c *Cache) {
 func InCacheUp(c *CacheUp) {
 	cacheTask.Lock()
 	defer cacheTask.Unlock()
+	if item, ok := cacheTask.Cache[c.File]; ok {
+		item.Accessed = c.Accessed
+		return
+	}
 	cacheTask.CacheUp[c.File] = c
 }
 
@@ -112,10 +116,6 @@ func handleLru(taskCycle, diskLimit int) {
 			if err := tx.Create(cache).Error; err != nil {
 				tx.Updates(cache)
 			}
-		}
-		if tx.Commit(); tx.Error != nil {
-			log.Println("事务提交失败:", tx.Error)
-			continue
 		}
 		// 处理lru信息。
 		for _, cacheup := range actionCacheUp {

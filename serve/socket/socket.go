@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/penndev/wafcdn/serve/conf"
 	"github.com/penndev/wafcdn/serve/orm"
+	"github.com/penndev/wafcdn/serve/util"
 )
 
 // 对nginx提供接口 获取域名的证书。
@@ -36,12 +37,20 @@ func handleGetSSL(c *gin.Context) {
 // @return cache 缓存信息
 func handleGetDomain(c *gin.Context) {
 	host := c.Query("host")
+	docacheLimitCount := 1
+	if util.DiskUsePercent() > conf.DocacheLimitStart {
+		docacheLimitCount = conf.DocacheLimitCount
+	}
 	if host != "" {
 		// 判断是否全速缓存。
 		if item, ok := conf.GetDomainItem(host); ok {
 			c.JSON(200, gin.H{
 				"backend": item.Backend,
 				"cache":   item.Cache,
+				// 处理wafcdn运行变量控制。
+				"wafcdn": gin.H{
+					"docachelimitcount": docacheLimitCount,
+				},
 			})
 			return
 		}

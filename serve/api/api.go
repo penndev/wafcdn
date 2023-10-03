@@ -1,9 +1,8 @@
 package api
 
 import (
-	"os"
-
 	"github.com/gin-gonic/gin"
+	"github.com/penndev/wafcdn/serve/conf"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -34,7 +33,7 @@ func handleRemoteStat(c *gin.Context) {
 		})
 		return
 	}
-	diskInfo, _ := disk.Usage(os.Getenv("CACHE_DIR"))
+	diskInfo, _ := disk.Usage(conf.CacheDir)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"err": err,

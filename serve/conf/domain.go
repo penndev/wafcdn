@@ -54,6 +54,20 @@ func GetDomainItem(host string) (DomainItem, bool) {
 	return item, ok
 }
 
+func GetDomainPorts() ([]int, []int) {
+	hp := []int{80}
+	hps := []int{443}
+	for _, val := range domainMap {
+		if val.Port > 0 {
+			hp = append(hp, val.Port)
+		}
+		if val.SSL.Port > 0 {
+			hps = append(hps, val.SSL.Port)
+		}
+	}
+	return hp, hps
+}
+
 func LoadDomain(domainFile string) {
 	domainByte, err := os.ReadFile(domainFile)
 	if err != nil {

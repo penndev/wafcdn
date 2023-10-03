@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -25,13 +26,17 @@ func Listen() {
 			panic(err)
 		}
 		gin.DefaultErrorWriter = logFile
-		log.SetOutput(logFile)
-		// 日志文件如何处理呢？r.Use(gin.Logger())
 		r.Use(gin.Recovery())
+
+		logServe, err := os.OpenFile("logs/serve.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			panic(err)
+		}
+		log.SetOutput(logServe)
 	} else {
 		r.Use(gin.Logger(), gin.Recovery())
 	}
 	socket.Route(r)
-	log.Println("Start Listening:", addr)
+	fmt.Println("Start Listening:", addr)
 	http.ListenAndServe(addr, r)
 }

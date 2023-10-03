@@ -3,6 +3,7 @@ local http = require("http")
 local json = require("cjson")
 local init = require("init")
 local lfs = require("lfs")
+local ngx = require("ngx")
 
 local sharedttl = init.sharedttl
 local domainurl = init.socketapi .. "/socket/domain?host="
@@ -163,8 +164,8 @@ local function setup()
     -- 回源请求。
     if ngx.var.request_method == "GET" then
         local doCacheTime = 0 --缓存过期时间
-        if config.cache ~= nil then
-            for _, cache in ipairs(config.cache) do
+        if config.cache and config.cache.rule then
+            for _, cache in ipairs(config.cache.rule) do
                 if cache.path and ngx.var.uri:match(cache.path) then
                     doCacheTime = cache.time
                     break
@@ -172,7 +173,7 @@ local function setup()
             end
         end
         if doCacheTime > 0 then --命中缓存规则
-            local filepath = config.identity .. cachepath(ngx.var.uri)
+            local filepath = config.cache.dir .. cachepath(ngx.var.uri)
             local doCacheFilePath = cachedir .. "/" .. filepath
             if cachevalid(doCacheFilePath, doCacheTime) then --缓存命中
                 ngx.req.set_uri_args({
@@ -182,11 +183,11 @@ local function setup()
                 ngx.req.set_uri("/@cache", true)
                 return
             end
-            if cachelock(doCacheFilePath, config.docachelimit) then -- 给缓存行为加锁
+            if cachelock(doCacheFilePath, config.wafcdn.docachelimitcount) then -- 给缓存行为加锁
                 ngx.ctx.docache = true
                 ngx.ctx.docachefilepath = doCacheFilePath
                 ngx.ctx.docachetime = doCacheTime
-                ngx.ctx.docacheidentity = config.identity
+                ngx.ctx.docacheidentity = config.cache.dir
             end
         end
     end
