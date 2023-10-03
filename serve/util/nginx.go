@@ -1,8 +1,9 @@
 package util
 
 import (
-	"log"
+	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -28,11 +29,11 @@ func genNginxConfFile() {
 	hp, hps := conf.GetDomainPorts()
 	nclh, nclhs := "", ""
 	for _, v := range hp {
-		log.Println("http-", v)
+		fmt.Println("Openresty Listen http:", v)
 		nclh += "listen " + strconv.Itoa(v) + "; "
 	}
 	for _, v := range hps {
-		log.Println("https-", v)
+		fmt.Println("Openresty Listen https:", v)
 		nclhs += "listen " + strconv.Itoa(v) + " ssl http2; "
 	}
 	nc = strings.Replace(nc, "$wafcdn_listen_http;", nclh, 1)
@@ -51,39 +52,24 @@ func genNginxConfFile() {
 }
 
 func StartNginx() {
+	// 生成nginx配置文件。
 	genNginxConfFile()
-	// // 设置启动参数
-	// nginxArgs := []string{
-	// 	"-c", "C:\\path\\to\\nginx\\nginx.conf",
-	// }
 
-	// // 创建一个执行 Nginx 命令的命令对象
-
-	// // 设置命令的环境变量（可选）
-	// cmd.Env = os.Environ()
-	// currentDirectory, err := os.Getwd()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// log.Println(currentDirectory)
-	// cmd := exec.Command("nginx", "-p "+currentDirectory)
-	// // 设置命令的环境变量（可选）
-	// // cmd.Env = os.Environ()
-
-	// // 启动 Nginx
-	// err = cmd.Start()
-	// if err != nil {
-	// 	fmt.Printf("启动 Nginx 出错：%v\n", err)
-	// 	return
-	// }
-
-	// // 等待 Nginx 进程退出
-	// err = cmd.Wait()
-	// if err != nil {
-	// 	fmt.Printf("Nginx 进程退出出错：%v\n", err)
-	// 	return
-	// }
-
-	// fmt.Println("Nginx 进程已退出")
-
+	var err error
+	var cmd *exec.Cmd
+	_, err = os.Stat("logs/nginx.pid")
+	if err == nil {
+		cmd = exec.Command("nginx", "-p", "./", "-s", "reload")
+	} else if os.IsNotExist(err) {
+		cmd = exec.Command("nginx", "-p", "./")
+	} else {
+		panic(err)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Start()
+	fmt.Println("Openresty starting")
+	if err != nil {
+		panic(err)
+	}
 }
