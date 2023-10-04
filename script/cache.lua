@@ -2,7 +2,7 @@ local init = require("init")
 local http = require("http")
 local json = require("cjson")
 
-local upcacheurl = init.socketapi .. "/socket/upcache"
+local upcacheurl = init.socketapi .. "/socket/cacheup"
 local sharedttl = init.sharedttl
 local upcachelimit = init.upcachelimit
 

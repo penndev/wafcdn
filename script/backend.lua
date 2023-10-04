@@ -3,7 +3,7 @@ local lfs = require("lfs")
 local http = require("http")
 local json = require("cjson")
 
-local docacheurl = init.socketapi .. "/socket/docache"
+local docacheurl = init.socketapi .. "/socket/cachedo"
 
 -- 递归创建缓存目录
 ---@param path string 要创建的文件路径

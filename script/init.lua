@@ -4,9 +4,10 @@ require("lfs")
 require("cjson")
 require("http")
 
+local ngx = require("ngx")
+
 local util = require("util")
 
-util.loadenv(".env")
 -- 检查参数
 local sharedttl = tonumber(util.getenv("SHARED_TTL"))
 if not sharedttl or sharedttl < 5 or sharedttl > 600 then

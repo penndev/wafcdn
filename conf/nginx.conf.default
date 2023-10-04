@@ -7,6 +7,12 @@ events {
     worker_connections 1024;
 }
 
+
+env SHARED_TTL=300;
+env SOCKET_API=$wafcdn_socket_api;
+env CACHE_DIR=$wafcdn_cache_dir;
+env UPCACHE_LIMIT_COUNT=10;
+
 http {
     resolver 8.8.8.8 8.8.4.4 valid=300s;
     lua_package_path "$prefix/script/?.lua;;";

@@ -37,6 +37,6 @@ func Listen() {
 		r.Use(gin.Logger(), gin.Recovery())
 	}
 	socket.Route(r)
-	fmt.Println("Start Listening:", addr)
+	fmt.Println("WafCdn Manage Listening:", addr)
 	http.ListenAndServe(addr, r)
 }

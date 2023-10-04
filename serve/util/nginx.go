@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/penndev/wafcdn/serve/conf"
 )
@@ -21,24 +22,32 @@ func genNginxConfFile() {
 		nc = strings.ReplaceAll(nc, "#!windows ", "")
 	}
 	if os.Getenv("MODE") == "dev" {
-		nc = strings.ReplaceAll(nc, "$wafcdn_error_level", "info")
+		nc = strings.ReplaceAll(nc, "$wafcdn_error_level;", "info;")
 	} else {
-		nc = strings.ReplaceAll(nc, "$wafcdn_error_level", "error")
+		nc = strings.ReplaceAll(nc, "$wafcdn_error_level;", "error;")
 	}
+	// 处理env配置项。
+	eport := strings.Split(os.Getenv("LISTEN"), ":")
+	if len(eport) == 2 {
+		nc = strings.ReplaceAll(nc, "$wafcdn_socket_api;", "http://127.0.0.1:"+eport[1]+";")
+	} else {
+		panic("env LISTEN set error")
+	}
+	nc = strings.ReplaceAll(nc, "$wafcdn_cache_dir;", os.Getenv("CACHE_DIR")+";")
 	// 处理动态监听端口。
 	hp, hps := conf.GetDomainPorts()
 	nclh, nclhs := "", ""
 	for _, v := range hp {
-		fmt.Println("Openresty Listen http:", v)
+		fmt.Println("WafCdn Service add http:", v)
 		nclh += "listen " + strconv.Itoa(v) + "; "
 	}
 	for _, v := range hps {
-		fmt.Println("Openresty Listen https:", v)
+		fmt.Println("WafCdn Service add https:", v)
 		nclhs += "listen " + strconv.Itoa(v) + " ssl http2; "
 	}
 	nc = strings.Replace(nc, "$wafcdn_listen_http;", nclh, 1)
 	nc = strings.Replace(nc, "$wafcdn_listen_https;", nclhs, 1)
-
+	// 生成新的配置文件。
 	ncf, err := os.Create("conf/nginx.conf")
 	if err != nil {
 		panic(err)
@@ -68,7 +77,13 @@ func StartNginx() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Start()
-	fmt.Println("Openresty starting")
+	fmt.Println("WafCdn Service Listening ...")
+	if err != nil {
+		panic(err)
+	}
+	time.Sleep(1 * time.Second)
+	// 再次判断是否存在nginx.pid
+	_, err = os.Stat("logs/nginx.pid")
 	if err != nil {
 		panic(err)
 	}

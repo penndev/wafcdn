@@ -3,6 +3,7 @@ local lock = require("resty.lock")
 local http = require("http")
 local json = require("cjson")
 local init = require("init")
+local ngx = require("ngx")
 
 local sharedttl = init.sharedttl
 local sslurl = init.socketapi
