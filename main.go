@@ -13,5 +13,6 @@ func main() {
 	orm.LoadCache(".cache.db")      // 加载持久缓存sqlite数据。
 	orm.CacheInAndLruOutTask()      // 启动缓存文件入库和清理。
 	util.StartNginx()               // 启动nginx(openresty)
+	util.InitNetTraffic()           // 监控系统的流量
 	serve.Listen()                  // http接口
 }

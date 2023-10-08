@@ -3,6 +3,8 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/penndev/wafcdn/serve/conf"
+	"github.com/penndev/wafcdn/serve/orm"
+	"github.com/penndev/wafcdn/serve/util"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -41,6 +43,7 @@ func handleRemoteStat(c *gin.Context) {
 		})
 		return
 	}
+	total, today := orm.CacheTotalandToday()
 	c.JSON(200, gin.H{
 		"memory": gin.H{
 			"total": memory.Total,
@@ -55,12 +58,12 @@ func handleRemoteStat(c *gin.Context) {
 			"used":  diskInfo.Used,
 		},
 		"file": gin.H{
-			// "total": filetotal,
-			// "today": filetoday,
+			"total": total,
+			"today": today,
 		},
 		"traffic": gin.H{
-			// "send": netTrafficSend,
-			// "recv": netTrafficRecv,
+			"send": util.NetTrafficSend,
+			"recv": util.NetTrafficRecv,
 		},
 	})
 }
@@ -68,6 +71,16 @@ func handleRemoteStat(c *gin.Context) {
 func Route(route *gin.Engine) {
 	socks := route.Group("/apiv1")
 	{
-		socks.POST("/stat", handleRemoteStat)
+		socks.Use(func(c *gin.Context) {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(200)
+				return
+			}
+			c.Next()
+		})
+		socks.GET("/stat", handleRemoteStat)
 	}
 }

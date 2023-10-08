@@ -151,3 +151,12 @@ func handleLru(taskCycle, diskLimit int) {
 		log.Println("CacheTask->", next-time.Now().Unix())
 	}
 }
+
+// 获取缓存数据统计。
+func CacheTotalandToday() (int64, int64) {
+	var total int64
+	DB.Model(&Cache{}).Count(&total)
+	var today int64
+	DB.Model(&Cache{}).Where("created_at > ?", time.Now().Format("2006-01-02 00:00:00")).Count(&today)
+	return total, today
+}

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/penndev/wafcdn/serve/api"
 	"github.com/penndev/wafcdn/serve/socket"
 )
 
@@ -37,6 +38,7 @@ func Listen() {
 		r.Use(gin.Logger(), gin.Recovery())
 	}
 	socket.Route(r)
+	api.Route(r)
 	fmt.Println("WafCdn Manage Listening:", addr)
 	http.ListenAndServe(addr, r)
 }
