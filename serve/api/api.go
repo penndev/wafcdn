@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/hex"
+
 	"github.com/gin-gonic/gin"
 	"github.com/penndev/wafcdn/serve/conf"
 	"github.com/penndev/wafcdn/serve/orm"
@@ -64,6 +66,10 @@ func handleRemoteStat(c *gin.Context) {
 		"traffic": gin.H{
 			"send": util.NetTrafficSend,
 			"recv": util.NetTrafficRecv,
+		},
+		"conf": gin.H{
+			"version": hex.EncodeToString(conf.DomainVersion.Version[:]),
+			"time":    conf.DomainVersion.ModTime.Unix(),
 		},
 	})
 }
