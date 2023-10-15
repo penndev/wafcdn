@@ -1,6 +1,7 @@
 local init = require("init")
 local http = require("http")
 local json = require("cjson")
+local ngx = require("ngx")
 
 local upcacheurl = init.socketapi .. "/socket/cacheup"
 local sharedttl = init.sharedttl
@@ -42,6 +43,11 @@ local function access()
         return ngx.exit(403)
     end
     ngx.var.cache_file = args.cache_file
+    ngx.ctx = {
+        backend = {
+            resp_header = json.decode(args.resp_header)
+        }
+    }
 end
 
 local function header()
