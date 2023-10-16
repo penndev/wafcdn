@@ -40,5 +40,7 @@ func Listen() {
 	socket.Route(r)
 	api.Route(r)
 	fmt.Println("WafCdn Manage Listening:", addr)
-	http.ListenAndServe(addr, r)
+	if err := http.ListenAndServe(addr, r); err != nil {
+		panic(err)
+	}
 }
