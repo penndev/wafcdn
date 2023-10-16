@@ -1,0 +1,11 @@
+[Unit]
+Description=WafCdn Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/wafcdn/wafcdn
+WorkingDirectory=/home/wafcdn
+
+[Install]
+WantedBy=multi-user.target

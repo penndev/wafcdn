@@ -14,6 +14,8 @@ env CACHE_DIR=$wafcdn_cache_dir;
 env UPCACHE_LIMIT_COUNT=10;
 
 http {
+    access_log off;
+    
     resolver 8.8.8.8 8.8.4.4 valid=300s;
     lua_package_path "$prefix/script/?.lua;;";
     lua_shared_dict ssl 128m;

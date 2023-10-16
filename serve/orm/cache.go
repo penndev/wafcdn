@@ -21,11 +21,11 @@ type CacheUp struct {
 }
 type Cache struct {
 	CacheUp
-	SiteID    string `gorm:"comment:网站标识" binding:"required"`
-	Path      string `gorm:"comment:请求路径" binding:"required"`
-	Size      int64  `gorm:"comment:文件大小"`
-	Expried   int64  `gorm:"comment:过期时间" binding:"required"`
-	CreatedAt time.Time
+	SiteID    string    `gorm:"comment:网站标识" binding:"required"`
+	Path      string    `gorm:"comment:请求路径" binding:"required"`
+	Size      int64     `gorm:"comment:文件大小"`
+	Expried   int64     `gorm:"comment:过期时间" binding:"required"`
+	CreatedAt time.Time `gorm:"index"`
 }
 
 func LoadCache(db string) {
@@ -36,7 +36,7 @@ func LoadCache(db string) {
 			panic(err)
 		}
 		gormConfig.Logger = logger.New(log.New(logFile, "\r\n", log.LstdFlags), logger.Config{
-			SlowThreshold:             200 * time.Millisecond,
+			SlowThreshold:             500 * time.Millisecond,
 			LogLevel:                  logger.Warn,
 			IgnoreRecordNotFoundError: false,
 			Colorful:                  true,
@@ -112,14 +112,17 @@ func handleLru(taskCycle, diskLimit int) {
 			continue
 		}
 		// 插入数据，已存在则更新。
+		insertNum, updateNum, expriedNum, lruNum := 0, 0, 0, 0
 		for _, cache := range actionCache {
 			if err := tx.Create(cache).Error; err != nil {
 				tx.Updates(cache)
 			}
+			insertNum += 1
 		}
 		// 处理lru信息。
 		for _, cacheup := range actionCacheUp {
 			tx.Model(&Cache{}).Where("file = ?", cacheup.File).Update("accessed", cacheup.Accessed)
+			updateNum += 1
 		}
 		if tx.Commit(); tx.Error != nil {
 			log.Println("事务提交失败:", tx.Error)
@@ -134,6 +137,7 @@ func handleLru(taskCycle, diskLimit int) {
 				DB.Model(&Cache{}).Select("File").Where("Expried < ?", next).Order("Expried ASC").Limit(1000).Pluck("File", &exprieds)
 				DB.Delete(&Cache{}, exprieds)
 				for _, f := range exprieds {
+					expriedNum += 1
 					os.Remove(f)
 				}
 				// lru 删除未过期的文件
@@ -141,6 +145,7 @@ func handleLru(taskCycle, diskLimit int) {
 				DB.Model(&Cache{}).Select("File").Order("Accessed ASC").Limit(1000).Pluck("File", &accesseds)
 				DB.Delete(&Cache{}, accesseds)
 				for _, f := range accesseds {
+					lruNum += 1
 					os.Remove(f)
 				}
 				continue
@@ -148,7 +153,7 @@ func handleLru(taskCycle, diskLimit int) {
 				break
 			}
 		}
-		log.Println("CacheTask->", next-time.Now().Unix())
+		log.Printf("handleLru insert[%d] update[%d] expried[%d] lru[%d] time[%d]", insertNum, updateNum, expriedNum, lruNum, next-time.Now().Unix())
 	}
 }
 

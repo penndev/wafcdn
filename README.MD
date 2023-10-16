@@ -26,3 +26,18 @@
 - 域名配置 waf cdn的功能。
 - 缓存管理 预加载，清理。
 - 运行监控服务器的运行情况等功能。
+
+
+## 环境安装
+
+- https://openresty.org/cn/installation.html
+
+- https://golang.google.cn/doc/install
+
+- https://goproxy.cn/
+
+- `ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx`
+
+- `cp wafcdn.service /usr/lib/systemd/system/wafcdn.service`
+
+- `systemctl stop firewalld`

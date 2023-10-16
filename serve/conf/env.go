@@ -26,6 +26,15 @@ func LoadEnv(f string) {
 		panic("cant get CACHE_DIR env")
 	}
 	CacheDir = os.Getenv("CACHE_DIR")
+	CacheDirInfo, err := os.Stat(CacheDir)
+	if err != nil {
+		panic(err)
+	}
+
+	// 判断是否是目录
+	if !CacheDirInfo.IsDir() {
+		panic(CacheDir + " is not dir")
+	}
 
 	// 缓存速率，cdn防止快进快出降低硬盘寿命。
 	docacheLimitStart, err := strconv.Atoi(os.Getenv("DOCACHE_LIMIT_STSRT"))
