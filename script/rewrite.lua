@@ -57,6 +57,7 @@ local socketClient = function(_, host)
         return
     end
     local res, reqerr = httpc:request_uri(domainurl .. host)
+    httpc:close()
     if not res then
         ngx.log(ngx.ERR, "request_uri err:", reqerr)
         local ok, err = my_lock:unlock()

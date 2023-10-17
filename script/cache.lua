@@ -27,6 +27,7 @@ local socketClient = function(premature, data)
             ["Content-Type"] = "application/json",
         }
     })
+    httpc:close()
     if not res then
         ngx.log(ngx.ERR, err)
         return nil

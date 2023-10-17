@@ -2,6 +2,7 @@ local init = require("init")
 local lfs = require("lfs")
 local http = require("http")
 local json = require("cjson")
+local ngx = require("ngx")
 
 local docacheurl = init.socketapi .. "/socket/cachedo"
 
@@ -59,6 +60,7 @@ local socketClient = function(_, data)
         }),
         headers = { ["Content-Type"] = "application/json" }
     })
+    httpc:close()
     if not res then
         ngx.log(ngx.ERR, err)
         return nil
@@ -79,6 +81,7 @@ local downloadClient = function(premature, req, cacheMeta)
         ngx.log(ngx.ERR, "http.request_uri return nil err:", reqerr)
         return nil
     end
+    httpc:close()
     if res.status == 200 then
         req.file:seek("set", 0)
         req.file:write(res.body)
@@ -93,7 +96,6 @@ local downloadClient = function(premature, req, cacheMeta)
             ngx.log(ngx.ERR, "cant remove cache file ", err)
         end
     end
-    httpc:close()
 end
 
 local function access()
