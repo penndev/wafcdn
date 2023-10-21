@@ -35,7 +35,16 @@ func Listen() {
 		}
 		log.SetOutput(logServe)
 	} else {
-		r.Use(gin.Logger(), gin.Recovery())
+		r.Use(gin.Logger(), gin.Recovery(), func(c *gin.Context) {
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Methods", "*")
+			c.Header("Access-Control-Allow-Headers", "*")
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(200)
+				return
+			}
+			c.Next()
+		})
 	}
 	socket.Route(r)
 	api.Route(r)

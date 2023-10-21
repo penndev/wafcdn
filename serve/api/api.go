@@ -2,8 +2,12 @@ package api
 
 import (
 	"encoding/hex"
+	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/penndev/gopkg/captcha"
 	"github.com/penndev/wafcdn/serve/conf"
 	"github.com/penndev/wafcdn/serve/orm"
 	"github.com/penndev/wafcdn/serve/util"
@@ -11,6 +15,60 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+func handleCaptcha(c *gin.Context) {
+	if vd, err := captcha.NewImg(); err == nil {
+		c.JSON(200, gin.H{
+			"captchaID":  vd.ID,
+			"captchaURL": vd.PngBase64,
+		})
+	} else {
+		c.JSON(400, gin.H{
+			"message": "获取验证码失败！",
+		})
+	}
+}
+
+func handleLogin(c *gin.Context) {
+	var json struct {
+		CaptchaID string `json:"captchaID" binding:"required"`
+		Captcha   string `json:"captcha" binding:"required"`
+		Username  string `json:"username" binding:"required"`
+		Password  string `json:"password" binding:"required"`
+	}
+	if c.ShouldBindJSON(&json) != nil {
+		c.JSON(400, gin.H{
+			"message": "接收参数错误",
+		})
+		return
+	}
+	if !captcha.Verify(json.CaptchaID, json.Captcha) {
+		c.JSON(400, gin.H{
+			"message": "验证码错误",
+		})
+		return
+	}
+	if json.Username != "wafcdn" || json.Password != os.Getenv("KEY") {
+		c.JSON(400, gin.H{
+			"message": "账号密码错误",
+		})
+		return
+	}
+	token := jwt.New(jwt.SigningMethodHS256)
+	tokenstr, err := token.SignedString([]byte(os.Getenv("KEY")))
+	if err != nil {
+		log.Println(err)
+		c.JSON(400, gin.H{
+			"message": "登录失败",
+		})
+		return
+	}
+	c.JSON(200, gin.H{
+		"token":  tokenstr,
+		"routes": "WafCdnStat",
+	})
+
+}
 
 func handleRemoteStat(c *gin.Context) {
 	memory, err := mem.VirtualMemory()
@@ -77,16 +135,8 @@ func handleRemoteStat(c *gin.Context) {
 func Route(route *gin.Engine) {
 	socks := route.Group("/apiv1")
 	{
-		socks.Use(func(c *gin.Context) {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
-			if c.Request.Method == "OPTIONS" {
-				c.AbortWithStatus(200)
-				return
-			}
-			c.Next()
-		})
+		socks.GET("/captcha", handleCaptcha)
 		socks.GET("/stat", handleRemoteStat)
+		socks.POST("/login", handleLogin)
 	}
 }
