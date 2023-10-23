@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/hex"
+	"errors"
 	"log"
 	"os"
 
@@ -65,6 +66,7 @@ func handleLogin(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{
 		"token":  tokenstr,
+		"home":   "/wafcdn/stat",
 		"routes": "WafCdnStat",
 	})
 
@@ -136,7 +138,32 @@ func Route(route *gin.Engine) {
 	socks := route.Group("/apiv1")
 	{
 		socks.GET("/captcha", handleCaptcha)
-		socks.GET("/stat", handleRemoteStat)
 		socks.POST("/login", handleLogin)
+		socks.Use(func(c *gin.Context) {
+			tokenStr := c.Request.Header.Get("X-Token")
+			if tokenStr == "" {
+				c.JSON(401, gin.H{
+					"message": "需要用户登录",
+				})
+				return
+			}
+			token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, errors.New("jwt验证方法错误")
+				}
+				return []byte(os.Getenv("KEY")), nil
+			})
+			if err != nil {
+				log.Println(err)
+			}
+			if !token.Valid {
+				c.JSON(401, gin.H{
+					"message": "需要用户登录1",
+				})
+				return
+			}
+			c.Next()
+		})
+		socks.GET("/stat", handleRemoteStat)
 	}
 }

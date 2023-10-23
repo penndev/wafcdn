@@ -2,3 +2,4 @@
 .domain.json
 .cache.db
 conf/nginx.conf
+*.exe*
