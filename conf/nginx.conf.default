@@ -1,10 +1,10 @@
 #!windows user root;
 worker_processes auto;
+# worker_rlimit_nofile 65535;
 
 error_log logs/error.log $wafcdn_error_level;
-
 events {
-    worker_connections 1024;
+    worker_connections 10240;
 }
 
 
@@ -16,7 +16,7 @@ env UPCACHE_LIMIT_COUNT=10;
 http {
     access_log off;
     
-    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver 223.5.5.5 223.6.6.6 valid=300s;
     lua_package_path "$prefix/script/?.lua;;";
     lua_shared_dict ssl 128m;
     lua_shared_dict ssl_lock 5m;

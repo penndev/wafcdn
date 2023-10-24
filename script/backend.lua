@@ -70,33 +70,76 @@ local socketClient = function(_, data)
     end
 end
 
-local downloadClient = function(premature, req, cacheMeta)
-    local httpc = http.new()
-    if not httpc then
-        ngx.log(ngx.ERR, "http.new return nil")
-        return nil
-    end
-    local res, reqerr = httpc:request_uri(req.url, req.params)
-    if not res then
-        ngx.log(ngx.ERR, "http.request_uri return nil err:", reqerr)
-        return nil
-    end
-    httpc:close()
-    if res.status == 200 then
-        req.file:seek("set", 0)
-        req.file:write(res.body)
-        req.file:close()
-        cacheMeta.size = tonumber(res.headers["Content-Length"])
-        socketClient(premature, cacheMeta)
-    else
-        ngx.log(ngx.INFO, req.url, " cant download | status:", res.status)
+
+local function downloadClient(premature, req, cacheMeta)
+    local cls = function ()
         req.file:close()
         local success, err = os.remove(cacheMeta.path)
         if not success then
             ngx.log(ngx.ERR, "cant remove cache file ", err)
         end
     end
+
+    local run = function ()
+        local httpc = http.new()
+        if not httpc then
+            error("http.new return nil")
+        end
+        local res, reqerr = httpc:request_uri(req.url, req.params)
+        if not res then
+            error(reqerr)
+        end
+        if res.status == 200 then
+            req.file:seek("set", 0)
+            req.file:write(res.body)
+            cacheMeta.size = tonumber(res.headers["Content-Length"])
+            socketClient(premature, cacheMeta)
+        else
+            ngx.log(ngx.INFO, req.url, " cant download | status:", res.status)
+            cls()
+        end
+    end
+
+    local status, result = xpcall(run, cls)
+    if not status then
+        ngx.log(ngx.ERR, "Error occurred: ", result)
+    end
 end
+
+-- 返回的时候没有remove file.
+-- local downloadClient = function(premature, req, cacheMeta)
+--     local httpc = http.new()
+--     if not httpc then
+--         ngx.log(ngx.ERR, "http.new return nil")
+--         return nil
+--     end
+--     local res, reqerr = httpc:request_uri(req.url, req.params)
+--     if not res then
+--         ngx.log(ngx.ERR, "http.request_uri return nil err:", reqerr)
+--         httpc:close()
+--         req.file:close()
+--         local success, err = os.remove(cacheMeta.path)
+--         if not success then
+--             ngx.log(ngx.ERR, "cant remove cache file ", err)
+--         end
+--         return nil
+--     end
+--     if res and res.status == 200 then
+--         req.file:seek("set", 0)
+--         req.file:write(res.body)
+--         req.file:close()
+--         cacheMeta.size = tonumber(res.headers["Content-Length"])
+--         socketClient(premature, cacheMeta)
+--     else
+--         ngx.log(ngx.INFO, req.url, " cant download | status:", res.status)
+--         req.file:close()
+--         local success, err = os.remove(cacheMeta.path)
+--         if not success then
+--             ngx.log(ngx.ERR, "cant remove cache file ", err)
+--         end
+--     end
+--     httpc:close()
+-- end
 
 local function access()
     if ngx.ctx.backend ~= nil then

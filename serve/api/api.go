@@ -66,7 +66,7 @@ func handleLogin(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{
 		"token":  tokenstr,
-		"home":   "/wafcdn/stat",
+		"index":  "/wafcdn/stat",
 		"routes": "WafCdnStat",
 	})
 

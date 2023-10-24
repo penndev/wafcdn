@@ -80,7 +80,9 @@ local socketClient = function(_, host)
         end
         return res.body
     else
-        ngx.log(ngx.ERR, "status:", res.status, "|body:", res.body)
+        if res.status ~= 400 then
+            ngx.log(ngx.ERR, "status:", res.status, "|body:", res.body)
+        end
         local ok, err = my_lock:unlock()
         if not ok then
             ngx.log(ngx.ERR, "cant unlock domain_lock:", err)
@@ -157,6 +159,10 @@ end
 
 local function setup()
     local domain = ngx.var.host
+    if not domain then
+        init.setNotFoundDomain()
+        return
+    end
     local config = getSocketDomain(domain)
     if config == nil then -- 没有获取到域名配置
         init.setNotFoundDomain()
@@ -177,6 +183,7 @@ local function setup()
             local filepath = config.cache.dir .. cachepath(ngx.var.uri)
             local doCacheFilePath = cachedir .. "/" .. filepath
             if cachevalid(doCacheFilePath, doCacheTime) then --缓存命中
+                -- 如果缓存文件缓存一半怎么处理。 理想网络状态不管。弱网环境需要进行验证。留置待优化。
                 ngx.req.set_uri_args({
                     cache_file = doCacheFilePath,
                     resp_header = json.encode(config.backend.resp_header)
