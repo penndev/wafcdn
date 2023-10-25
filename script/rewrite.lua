@@ -184,6 +184,7 @@ local function setup()
             local doCacheFilePath = cachedir .. "/" .. filepath
             if cachevalid(doCacheFilePath, doCacheTime) then --缓存命中
                 -- 如果缓存文件缓存一半怎么处理。 理想网络状态不管。弱网环境需要进行验证。留置待优化。
+                -- 最佳的办法将文件命名后增加.cache后缀完成后再去掉后缀。
                 ngx.req.set_uri_args({
                     cache_file = doCacheFilePath,
                     resp_header = json.encode(config.backend.resp_header)
@@ -191,6 +192,7 @@ local function setup()
                 ngx.req.set_uri("/@cache", true)
                 return
             end
+            -- 缓存失败攻击。如果一直返回非200的请求。那么是否是一直在攻击？应该如何处理呢。
             if cachelock(doCacheFilePath, config.wafcdn.docachelimitcount) then -- 给缓存行为加锁
                 ngx.ctx.docache = true
                 ngx.ctx.docachefilepath = doCacheFilePath
