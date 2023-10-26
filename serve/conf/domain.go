@@ -55,17 +55,20 @@ func GetDomainItem(host string) (DomainItem, bool) {
 }
 
 func GetDomainPorts() ([]int, []int) {
-	hp := []int{80}
-	hps := []int{443}
+	ports := make(map[int]bool)
+	httplisten := []int{80}
+	httpslisten := []int{443}
 	for _, val := range domainMap {
-		if val.Port > 0 {
-			hp = append(hp, val.Port)
+		if val.Port > 0 && !ports[val.Port] {
+			httplisten = append(httplisten, val.Port)
+			ports[val.Port] = true
 		}
-		if val.SSL.Port > 0 {
-			hps = append(hps, val.SSL.Port)
+		if val.SSL.Port > 0 && !ports[val.SSL.Port] {
+			httpslisten = append(httpslisten, val.SSL.Port)
+			ports[val.SSL.Port] = true
 		}
 	}
-	return hp, hps
+	return httplisten, httpslisten
 }
 
 func LoadDomain(domainFile string) {

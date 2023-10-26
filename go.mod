@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/glebarez/sqlite v1.9.0
+	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/joho/godotenv v1.5.1
 	github.com/penndev/gopkg v0.0.0-20231020073356-b0175be71861
 	github.com/shirou/gopsutil/v3 v3.23.9
@@ -24,7 +25,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.15.5 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
