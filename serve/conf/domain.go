@@ -71,6 +71,10 @@ func GetDomainPorts() ([]int, []int) {
 	return httplisten, httpslisten
 }
 
+func GetDomain() map[string]DomainItem {
+	return domainMap
+}
+
 func LoadDomain(domainFile string) {
 	domainByte, err := os.ReadFile(domainFile)
 	if err != nil {
