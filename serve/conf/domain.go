@@ -75,6 +75,8 @@ func GetDomain() map[string]DomainItem {
 	return domainMap
 }
 
+var DomainFileName = ".domain.json"
+
 func LoadDomain(domainFile string) {
 	domainByte, err := os.ReadFile(domainFile)
 	if err != nil {

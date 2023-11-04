@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
@@ -69,7 +70,6 @@ func handleLogin(c *gin.Context) {
 		"index":  "/wafcdn/stat",
 		"routes": "WafCdnStat,WafCdnDomain",
 	})
-
 }
 
 func handleRemoteStat(c *gin.Context) {
@@ -143,6 +143,47 @@ func handleDomain(c *gin.Context) {
 	c.JSON(200, domainList)
 }
 
+func handleDomainUpdate(c *gin.Context) {
+	var domainConfigs []conf.DomainItem
+	if err := c.ShouldBindJSON(&domainConfigs); err != nil {
+		c.JSON(400, gin.H{
+			"msg": err.Error(),
+		})
+		return
+	}
+	// 将数据编码为JSON格式
+	jsonData, err := json.MarshalIndent(domainConfigs, "", "  ")
+	if err != nil {
+		c.JSON(400, gin.H{
+			"msg": err.Error(),
+		})
+		return
+	}
+
+	// 将JSON数据写入文件
+	file, err := os.Create(conf.DomainFileName)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"msg": err.Error(),
+		})
+		return
+	}
+	defer conf.LoadDomain(conf.DomainFileName)
+	defer file.Close()
+	_, err = file.Write(jsonData)
+	if err != nil {
+		c.JSON(400, gin.H{
+			"msg": err.Error(),
+		})
+		return
+	}
+	// 写入到文件。
+	log.Println(domainConfigs)
+	c.JSON(200, gin.H{
+		"msg": "完成",
+	})
+}
+
 func jwtMiddle(c *gin.Context) {
 	tokenStr := c.Request.Header.Get("X-Token")
 	if tokenStr == "" {
@@ -177,5 +218,6 @@ func Route(route *gin.Engine) {
 		socks.Use(jwtMiddle)
 		socks.GET("/stat", handleRemoteStat)
 		socks.GET("/domain", handleDomain)
+		socks.PUT("/domain", handleDomainUpdate)
 	}
 }
