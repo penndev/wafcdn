@@ -68,40 +68,66 @@ func handleLogin(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"token":  tokenstr,
 		"index":  "/wafcdn/stat",
-		"routes": "WafCdnStat,WafCdnDomain",
+		"routes": "WafCdnStat,WafCdnDomain,WafCdnCache",
 	})
+}
+
+func jwtMiddle(c *gin.Context) {
+	tokenStr := c.Request.Header.Get("X-Token")
+	if tokenStr == "" {
+		c.JSON(401, gin.H{
+			"message": "需要用户登录",
+		})
+		c.Abort()
+	}
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("jwt验证方法错误")
+		}
+		return []byte(os.Getenv("KEY")), nil
+	})
+	if err != nil {
+		log.Println(err)
+	}
+	if !token.Valid {
+		c.JSON(401, gin.H{
+			"message": "需要用户登录1",
+		})
+		c.Abort()
+	}
+	c.Next()
 }
 
 func handleRemoteStat(c *gin.Context) {
 	memory, err := mem.VirtualMemory()
 	if err != nil {
 		c.JSON(500, gin.H{
-			"err": err,
-			"msg": "cant get memory!",
+			"err":     err,
+			"message": "cant get memory!",
 		})
 		return
 	}
 	cpuCounts, err := cpu.Counts(true)
 	if err != nil {
 		c.JSON(500, gin.H{
-			"err": err,
-			"msg": "cant get cpuPercent!",
+			"err":     err,
+			"message": "cant get cpuPercent!",
 		})
 		return
 	}
 	cpuPercent, err := cpu.Percent(0, false)
 	if err != nil {
 		c.JSON(500, gin.H{
-			"err": err,
-			"msg": "cant get cpuPercent!",
+			"err":     err,
+			"message": "cant get cpuPercent!",
 		})
 		return
 	}
 	diskInfo, _ := disk.Usage(conf.CacheDir)
 	if err != nil {
 		c.JSON(500, gin.H{
-			"err": err,
-			"msg": "cant get disk.Usage!",
+			"err":     err,
+			"message": "cant get disk.Usage!",
 		})
 		return
 	}
@@ -147,7 +173,7 @@ func handleDomainUpdate(c *gin.Context) {
 	var domainConfigs []conf.DomainItem
 	if err := c.ShouldBindJSON(&domainConfigs); err != nil {
 		c.JSON(400, gin.H{
-			"msg": err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
@@ -155,7 +181,7 @@ func handleDomainUpdate(c *gin.Context) {
 	jsonData, err := json.MarshalIndent(domainConfigs, "", "  ")
 	if err != nil {
 		c.JSON(400, gin.H{
-			"msg": err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
@@ -164,7 +190,7 @@ func handleDomainUpdate(c *gin.Context) {
 	file, err := os.Create(conf.DomainFileName)
 	if err != nil {
 		c.JSON(400, gin.H{
-			"msg": err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
@@ -173,41 +199,42 @@ func handleDomainUpdate(c *gin.Context) {
 	_, err = file.Write(jsonData)
 	if err != nil {
 		c.JSON(400, gin.H{
-			"msg": err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
 	// 写入到文件。
 	log.Println(domainConfigs)
 	c.JSON(200, gin.H{
-		"msg": "完成",
+		"message": "完成",
 	})
 }
 
-func jwtMiddle(c *gin.Context) {
-	tokenStr := c.Request.Header.Get("X-Token")
-	if tokenStr == "" {
-		c.JSON(401, gin.H{
-			"message": "需要用户登录",
+func handleCacheList(c *gin.Context) {
+	var list []orm.Cache
+	var count int64
+	var param struct {
+		Page  int `form:"page" binding:"required,gte=0"`
+		Limit int `form:"limit" binding:"required,gte=20,lte=100"`
+	}
+	if err := c.ShouldBindQuery(&param); err != nil {
+		c.JSON(400, gin.H{
+			"message": err.Error(),
 		})
 		return
 	}
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("jwt验证方法错误")
-		}
-		return []byte(os.Getenv("KEY")), nil
+	query := orm.DB.Model(orm.Cache{})
+	query.Count(&count)
+	query.Offset((param.Page - 1) * param.Limit).Limit(param.Limit).Find(&list)
+	c.JSON(200, gin.H{
+		"total": count,
+		"data":  list,
 	})
-	if err != nil {
-		log.Println(err)
-	}
-	if !token.Valid {
-		c.JSON(401, gin.H{
-			"message": "需要用户登录1",
-		})
-		return
-	}
-	c.Next()
+
+}
+
+func handleCacheListDelete(c *gin.Context) {
+
 }
 
 func Route(route *gin.Engine) {
@@ -216,8 +243,12 @@ func Route(route *gin.Engine) {
 		socks.GET("/captcha", handleCaptcha)
 		socks.POST("/login", handleLogin)
 		socks.Use(jwtMiddle)
-		socks.GET("/stat", handleRemoteStat)
-		socks.GET("/domain", handleDomain)
-		socks.PUT("/domain", handleDomainUpdate)
+		{
+			socks.GET("/stat", handleRemoteStat)
+			socks.GET("/domain", handleDomain)
+			socks.PUT("/domain", handleDomainUpdate)
+			socks.GET("/cache", handleCacheList)
+			socks.DELETE("/cache", handleCacheListDelete)
+		}
 	}
 }
