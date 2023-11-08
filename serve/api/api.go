@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -234,7 +235,17 @@ func handleCacheList(c *gin.Context) {
 }
 
 func handleCacheListDelete(c *gin.Context) {
-
+	file := c.Query("file")
+	list := strings.Split(file, ",")
+	var deleteFile []string
+	orm.DB.Model(orm.Cache{}).Where("file in ?", list).Pluck("File", &deleteFile)
+	for _, item := range deleteFile {
+		os.Remove(item)
+	}
+	orm.DB.Delete(orm.Cache{}, deleteFile)
+	c.JSON(200, gin.H{
+		"message": "完成",
+	})
 }
 
 func Route(route *gin.Engine) {
