@@ -231,7 +231,6 @@ func handleCacheList(c *gin.Context) {
 		"total": count,
 		"data":  list,
 	})
-
 }
 
 func handleCacheListDelete(c *gin.Context) {
