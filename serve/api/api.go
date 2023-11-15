@@ -215,8 +215,9 @@ func handleCacheList(c *gin.Context) {
 	var list []orm.Cache
 	var count int64
 	var param struct {
-		Page  int `form:"page" binding:"required,gte=0"`
-		Limit int `form:"limit" binding:"required,gte=20,lte=100"`
+		Page  int    `form:"page" binding:"required,gte=0"`
+		Limit int    `form:"limit" binding:"required,gte=20,lte=100"`
+		Path  string `form:"path"`
 	}
 	if err := c.ShouldBindQuery(&param); err != nil {
 		c.JSON(400, gin.H{
@@ -225,6 +226,9 @@ func handleCacheList(c *gin.Context) {
 		return
 	}
 	query := orm.DB.Model(orm.Cache{})
+	if param.Path != "" {
+		query.Where("path like ?", param.Path+"%")
+	}
 	query.Count(&count)
 	query.Offset((param.Page - 1) * param.Limit).Limit(param.Limit).Find(&list)
 	c.JSON(200, gin.H{
