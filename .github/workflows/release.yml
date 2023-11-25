@@ -20,7 +20,11 @@ jobs:
         uses: actions/checkout@v2
       - name: Build Program
         run: go build
+      - name: Pack Files
+        run: |
+          ls -al
+          tar -zcvf wafcdn.tar wafcdn .env.sample
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: ./
+          files: wafcdn.tar
