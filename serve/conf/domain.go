@@ -3,6 +3,8 @@ package conf
 import (
 	"crypto/md5"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"time"
 )
@@ -78,14 +80,17 @@ func GetDomain() map[string]DomainItem {
 var DomainFileName = ".domain.json"
 
 func LoadDomain(domainFile string) {
-	domainByte, err := os.ReadFile(domainFile)
+	domainRead, err := os.OpenFile(domainFile, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err)
 	}
-	// 如果文件不存在怎么办。?待思考
+	domainByte, err := io.ReadAll(domainRead)
+	if err != nil {
+		panic(err)
+	}
 	var domainConfigs []DomainItem
 	if err := json.Unmarshal(domainByte, &domainConfigs); err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 	domainMap = make(map[string]DomainItem)
 	for _, domaininfo := range domainConfigs {

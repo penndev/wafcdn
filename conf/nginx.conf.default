@@ -15,7 +15,6 @@ env UPCACHE_LIMIT_COUNT=10;
 
 http {
     access_log off;
-    
     resolver 223.5.5.5 223.6.6.6 valid=300s;
     lua_package_path "$prefix/script/?.lua;;";
     lua_shared_dict ssl 128m;

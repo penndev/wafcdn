@@ -8,14 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21.x']
     steps:
-      - name: Setup Go ${{ matrix.go-version }}
+      - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: '1.21.x'
       - name: Setup Luajit
         run: |
           sudo apt-get update
@@ -23,9 +20,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Build Golnag
-        run: go build
+        run: |
+          go version
+          export CGO_ENABLED=0
+          go build
       - name: Build Luajit
         run: |
+          luajit -v
           folder="./script"
           for file in $folder/*.lua
           do
@@ -33,7 +34,7 @@ jobs:
           done
       - name: Archive Files
         run: |
-          tar -czvf wafcdn.tar.gz *
+          tar -czvf wafcdn.tar.gz wafcdn .env.sample conf script
           zip -r wafcdn.zip *
       - name: Release
         uses: softprops/action-gh-release@v1

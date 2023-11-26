@@ -61,9 +61,13 @@ func genNginxConfFile() {
 }
 
 func StartNginx() {
+	// 获取nginx的安装路径。
+	nginxPath := os.Getenv("NGINX_PATH")
+	if nginxPath == "" {
+		panic("cant find the NGINX_PATH")
+	}
 	// 生成nginx配置文件。
 	genNginxConfFile()
-
 	var err error
 	var cmd *exec.Cmd
 	_, err = os.Stat("logs/nginx.pid")

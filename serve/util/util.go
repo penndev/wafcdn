@@ -1,7 +1,9 @@
 package util
 
 import (
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/penndev/wafcdn/serve/conf"
@@ -46,4 +48,16 @@ func InitNetTraffic() {
 			}
 		}
 	}()
+}
+
+func MkdirLogDir(logDir string) {
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		err := os.MkdirAll(logDir, 0755)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Directory created successfully")
+	} else if err != nil {
+		panic(err)
+	}
 }
