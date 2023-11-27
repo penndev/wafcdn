@@ -15,6 +15,7 @@ jobs:
           go-version: '1.21.x'
       - name: Setup Luajit
         run: |
+          uname -a
           sudo apt-get update
           sudo apt-get -y install --no-install-recommends wget gnupg ca-certificates
           wget -O - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
