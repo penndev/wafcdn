@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21.x'
       - name: Setup Luajit
@@ -39,11 +39,9 @@ jobs:
           done
       - name: Archive Files
         run: |
-          tar -czvf wafcdn.tar.gz wafcdn .env.sample conf script
-          zip -r wafcdn.zip *
+          tar -czvf wafcdn.tar.gz wafcdn .env.sample conf script dist
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             wafcdn.tar.gz
-            wafcdn.zip
