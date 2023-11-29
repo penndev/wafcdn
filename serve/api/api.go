@@ -252,7 +252,7 @@ func handleCacheListDelete(c *gin.Context) {
 }
 
 func Route(route *gin.Engine) {
-	socks := route.Group("/apiv1")
+	socks := route.Group("/api")
 	{
 		socks.GET("/captcha", handleCaptcha)
 		socks.POST("/login", handleLogin)
