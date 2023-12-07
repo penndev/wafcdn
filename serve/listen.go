@@ -16,6 +16,7 @@ func Listen() {
 	if addr == "" {
 		panic("Cant get env LISTEN")
 	}
+	addr = ":" + addr
 	if os.Getenv("MODE") != "dev" {
 		gin.SetMode(gin.ReleaseMode)
 	}

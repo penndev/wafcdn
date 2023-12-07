@@ -22,6 +22,10 @@ jobs:
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list > /dev/null
           sudo apt-get update
           sudo apt-get -y install openresty
+      - name: Setup Node 
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Build Golnag
@@ -37,9 +41,20 @@ jobs:
           do
             /usr/local/openresty/luajit/bin/luajit -b $file $file
           done
+      - uses: actions/checkout@v4
+        with:
+          repository: 'penndev/veadmin'
+          path: './veadmin'
+      - name: Build dist
+        run: |
+          cd ./veadmin
+          npm install
+          npm run build-wafcdn
+          mv ./dist ../dist
+          cd ../
       - name: Archive Files
         run: |
-          tar -czvf wafcdn.tar.gz wafcdn .env.sample conf script dist
+          tar -czvf wafcdn.tar.gz conf script wafcdn dist .env.sample wafcdn.service
       - name: Release
         uses: softprops/action-gh-release@v1
         with:

@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/home/wafcdn/wafcdn
-WorkingDirectory=/home/wafcdn
+ExecStart=$installpath/wafcdn
+WorkingDirectory=$installpath
 
 [Install]
 WantedBy=multi-user.target

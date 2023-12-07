@@ -30,14 +30,4 @@
 
 ## 环境安装
 
-- https://openresty.org/cn/installation.html
-
-- https://golang.google.cn/doc/install
-
-- https://goproxy.cn/
-
-- `ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx`
-
-- `cp wafcdn.service /usr/lib/systemd/system/wafcdn.service`
-
-- `systemctl stop firewalld`
+自助安装脚本 https://gist.github.com/penndev/9f01b3864abe2368424d3a79f5efff7e

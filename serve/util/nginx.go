@@ -62,9 +62,9 @@ func genNginxConfFile() {
 
 func StartNginx() {
 	// 获取nginx的安装路径。
-	nginxPath := os.Getenv("NGINX_PATH")
+	nginxPath := os.Getenv("BIN_PATH")
 	if nginxPath == "" {
-		panic("cant find the NGINX_PATH")
+		panic("cant find the BIN_PATH")
 	}
 	// 生成nginx配置文件。
 	genNginxConfFile()
