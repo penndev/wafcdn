@@ -7,10 +7,29 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/penndev/wafcdn/serve/conf"
 )
+
+func checkNginxStatus() bool {
+	pidfile, err := os.ReadFile("logs/nginx.pid")
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(string(pidfile))
+	if err != nil {
+		return false
+	}
+
+	if p, err := os.FindProcess(pid); err != nil {
+		return false
+	} else {
+		e := p.Signal(syscall.Signal(0))
+		return e == nil
+	}
+}
 
 func genNginxConfFile() {
 	ncdb, err := os.ReadFile("conf/nginx.conf.default")
@@ -62,8 +81,8 @@ func genNginxConfFile() {
 
 func StartNginx() {
 	// 获取nginx的安装路径。
-	nginxPath := os.Getenv("BIN_PATH")
-	if nginxPath == "" {
+	nginxBin := os.Getenv("BIN_PATH")
+	if nginxBin == "" {
 		panic("cant find the BIN_PATH")
 	}
 	// 生成nginx配置文件。
@@ -72,9 +91,17 @@ func StartNginx() {
 	var cmd *exec.Cmd
 	_, err = os.Stat("logs/nginx.pid")
 	if err == nil {
-		cmd = exec.Command("nginx", "-p", "./", "-s", "reload")
+		// 进程是否真的存活。
+		if checkNginxStatus() {
+			cmd = exec.Command(nginxBin, "-p", "./", "-s", "reload")
+		} else {
+			if err := os.Remove("logs/nginx.pid"); err != nil {
+				panic(err)
+			}
+			cmd = exec.Command(nginxBin, "-p", "./")
+		}
 	} else if os.IsNotExist(err) {
-		cmd = exec.Command("nginx", "-p", "./")
+		cmd = exec.Command(nginxBin, "-p", "./")
 	} else {
 		panic(err)
 	}
