@@ -49,7 +49,7 @@ jobs:
         run: |
           cd ./veadmin
           npm install
-          npm run build-wafcdn
+          npm run build:wafcdn
           mv ./dist ../dist
           cd ../
       - name: Archive Files
