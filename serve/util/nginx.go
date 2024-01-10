@@ -32,49 +32,56 @@ func checkNginxStatus() bool {
 }
 
 func genNginxConfFile() {
-	ncdb, err := os.ReadFile("conf/nginx.conf.default")
+	nginxConfDefault, err := os.ReadFile("conf/nginx.conf.default")
 	if err != nil {
 		panic(err)
 	}
-	nc := string(ncdb)
+	nginxConf := string(nginxConfDefault)
 	if runtime.GOOS != "windows" {
-		nc = strings.ReplaceAll(nc, "#!windows ", "")
+		nginxConf = strings.ReplaceAll(nginxConf, "#!windows ", "")
 	}
 	if os.Getenv("MODE") == "dev" {
-		nc = strings.ReplaceAll(nc, "$wafcdn_error_level;", "info;")
+		nginxConf = strings.ReplaceAll(nginxConf, "$wafcdn_error_level;", "info;")
 	} else {
-		nc = strings.ReplaceAll(nc, "$wafcdn_error_level;", "error;")
+		nginxConf = strings.ReplaceAll(nginxConf, "$wafcdn_error_level;", "error;")
 	}
 	// 处理env配置项。
-	eport := strings.Split(os.Getenv("LISTEN"), ":")
-	if len(eport) == 2 {
-		nc = strings.ReplaceAll(nc, "$wafcdn_socket_api;", "http://127.0.0.1:"+eport[1]+";")
+	envPort := strings.Split(os.Getenv("LISTEN"), ":")
+	if len(envPort) == 2 {
+		nginxConf = strings.ReplaceAll(nginxConf, "$wafcdn_socket_api;", "http://127.0.0.1:"+envPort[1]+";")
 	} else {
 		panic("env LISTEN set error")
 	}
-	nc = strings.ReplaceAll(nc, "$wafcdn_cache_dir;", os.Getenv("CACHE_DIR")+";")
-	// 处理动态监听端口。
-	hp, hps := conf.GetDomainPorts()
-	nclh, nclhs := "", ""
-	for _, v := range hp {
-		fmt.Println("WafCdn Service add http:", v)
-		nclh += "listen " + strconv.Itoa(v) + "; "
+	nginxConf = strings.ReplaceAll(nginxConf, "$wafcdn_cache_dir;", os.Getenv("CACHE_DIR")+";")
+	// 处理动态监听端口。//如果http已经占用端口https则取消占用。
+	httpPorts, httpsPorts := conf.GetDomainPorts()
+	httpList, httpsList := "", ""
+	for _, v := range httpPorts {
+		httpSub := "listen " + strconv.Itoa(v) + "; "
+		if !strings.Contains(httpList, httpSub) {
+			fmt.Println("WafCdn Service add http:", v)
+			httpList += httpSub
+		}
 	}
-	for _, v := range hps {
-		fmt.Println("WafCdn Service add https:", v)
-		nclhs += "listen " + strconv.Itoa(v) + " ssl http2; "
+	for _, v := range httpsPorts {
+		httpsSub := "listen " + strconv.Itoa(v) + " ssl http2; "
+		httpSub := "listen " + strconv.Itoa(v) + "; "
+		if !strings.Contains(httpsList, httpSub) && !strings.Contains(httpsList, httpsSub) {
+			fmt.Println("WafCdn Service add https:", v)
+			httpsList += httpsSub
+		}
 	}
-	nc = strings.Replace(nc, "$wafcdn_listen_http;", nclh, 1)
-	nc = strings.Replace(nc, "$wafcdn_listen_https;", nclhs, 1)
+	nginxConf = strings.Replace(nginxConf, "$wafcdn_listen_http;", httpList, 1)
+	nginxConf = strings.Replace(nginxConf, "$wafcdn_listen_https;", httpsList, 1)
 	// 生成新的配置文件。
-	ncf, err := os.Create("conf/nginx.conf")
+	nginxConfFile, err := os.Create("conf/nginx.conf")
 	if err != nil {
 		panic(err)
 	}
-	if _, err = ncf.WriteString(nc); err != nil {
+	if _, err = nginxConfFile.WriteString(nginxConf); err != nil {
 		panic(err)
 	}
-	if err = ncf.Close(); err != nil {
+	if err = nginxConfFile.Close(); err != nil {
 		panic(err)
 	}
 }
@@ -116,6 +123,11 @@ func StartNginx() {
 	// 再次判断是否存在nginx.pid
 	_, err = os.Stat("logs/nginx.pid")
 	if err != nil {
+		cmd := exec.Command(nginxBin, "-p", "./", "-t")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Start()
+		fmt.Println("Pleases check nginx error: nginx -t | port use")
 		panic(err)
 	}
 }
