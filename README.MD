@@ -1,4 +1,4 @@
-# WafCdn
+# WAFCDN
 
 > 基于openresty开发的服务器网关，融合waf和cdn的功能。
 
@@ -11,7 +11,7 @@
 - IP地域限制
 - 客户端token校验(网页验证码)
 
-## CDN加速分发 √
+## CDN加速分发
 
 - 使用nginx原生ngx_http_proxy_module模块来进行回源处理，稳定。
 
@@ -19,14 +19,13 @@
 
 - 使用nginx lua module来完成缓存高效的动态匹配与响应。
 
-## WAFCDN后台管理 ×
+## WAFCDN后台管理
 
 > 使用golang编写的api来操作整体的wafcdn运行情况 
 
 - 域名配置 waf cdn的功能。
 - 缓存管理 预加载，清理。
 - 运行监控服务器的运行情况等功能。
-
 
 ## 环境安装
 
