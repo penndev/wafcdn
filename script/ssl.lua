@@ -5,7 +5,7 @@ local json = require("cjson")
 local init = require("init")
 local ngx = require("ngx")
 
-local sharedttl = init.sharedttl
+local domainttl = init.domainttl
 local sslurl = init.socketapi
 local socketClient = function(_, hostname)
     local my_lock, mylockerr = lock:new("ssl_lock")
@@ -29,7 +29,7 @@ local socketClient = function(_, hostname)
         return { crt = crt, key = key }
     end
     -- 强制限制避免回源失败的缓存穿透
-    local locksuccess, lockadderr, lockforcible = ngx.shared.ssl_lock:add(hostname .. ".lock", true, sharedttl)
+    local locksuccess, lockadderr, lockforcible = ngx.shared.ssl_lock:add(hostname .. ".lock", true, domainttl)
     if lockadderr and lockadderr ~= "exists" then
         ngx.log(ngx.ERR, "ngx.shared.ssl_lock err:", lockadderr)
     end
@@ -67,7 +67,7 @@ local socketClient = function(_, hostname)
         local certmeta = json.decode(res.body)
         local crt = ngx.decode_base64(certmeta.crt)
         local key = ngx.decode_base64(certmeta.key)
-        local success, sslerr, forcible = ngx.shared.ssl:set(hostname, crt .. "$" .. key, sharedttl)
+        local success, sslerr, forcible = ngx.shared.ssl:set(hostname, crt .. "$" .. key, domainttl)
         if sslerr or not success then
             ngx.log(ngx.ERR, "ngx.shared.ssl set err:", sslerr)
         end

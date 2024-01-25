@@ -6,6 +6,7 @@ local lfs = require("lfs")
 local ngx = require("ngx")
 
 local sharedttl = init.sharedttl
+local domainttl = init.domainttl
 local domainurl = init.socketapi .. "/socket/domain?host="
 local cachedir = init.cachedir
 
@@ -32,7 +33,7 @@ local socketClient = function(_, host)
         return tostring(value)
     end
     -- 强制限制避免回源失败的缓存穿透
-    local sharedsuccess, sharederr, sharedforcible = ngx.shared.domain:add(host .. ".lock", true, sharedttl)
+    local sharedsuccess, sharederr, sharedforcible = ngx.shared.domain:add(host .. ".lock", true, domainttl)
     if sharederr and sharederr ~= "exists" then
         ngx.log(ngx.ERR, "ngx.shared.domain err:", sharederr)
     end
@@ -67,7 +68,7 @@ local socketClient = function(_, host)
         return
     end
     if res.status == 200 then
-        local success, seterr, forcible = ngx.shared.domain:set(host, res.body, sharedttl)
+        local success, seterr, forcible = ngx.shared.domain:set(host, res.body, domainttl)
         if seterr or not success then
             ngx.log(ngx.ERR, "ngx.shared.domain set err:", seterr)
         end

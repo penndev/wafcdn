@@ -58,7 +58,7 @@ func handleLogin(c *gin.Context) {
 		return
 	}
 	token := jwt.New(jwt.SigningMethodHS256)
-	tokenstr, err := token.SignedString([]byte(os.Getenv("KEY")))
+	tokenStr, err := token.SignedString([]byte(os.Getenv("KEY")))
 	if err != nil {
 		log.Println(err)
 		c.JSON(400, gin.H{
@@ -67,8 +67,7 @@ func handleLogin(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"token":  tokenstr,
-		"index":  "/wafcdn/stat",
+		"token":  tokenStr,
 		"routes": "WafCdnStat,WafCdnDomain,WafCdnCache",
 	})
 }

@@ -14,6 +14,11 @@ if not sharedttl or sharedttl < 5 or sharedttl > 600 then
     error("set env SHARED_TTL net < 5 and > 600")
 end
 
+local domainttl = tonumber(util.getenv("DOMAIN_TTL"))
+if not domainttl or domainttl < 5 or domainttl > 600 then
+    error("set env DOMAIN_TTL net < 5 and > 600")
+end
+
 local socketapi = util.getenv("SOCKET_API")
 if not socketapi then
     error("cant get env SOCKET_API")
@@ -37,10 +42,11 @@ local function setNotFoundDomain()
 end
 
 return {
-    sharedttl = sharedttl,
-    socketapi = socketapi,
-    cachedir = cachedir,
-    upcachelimit = upcachelimit,
+    sharedttl = sharedttl, -- 通用缓存生存时间/秒 [刷新热度，文件缓存加锁]
+    domainttl = domainttl, -- 域名缓存时间/秒 [ssl证书，配置域名信息]
+    socketapi = socketapi, -- 控制后台api
+    cachedir = cachedir, -- 缓存的控制目录
+    upcachelimit = upcachelimit, -- 刷新热度 访问/次
 
     setNotFoundDomain = setNotFoundDomain,
     serverFlagDocache = "wafcdn#docache",

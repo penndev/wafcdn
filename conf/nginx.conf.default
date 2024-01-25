@@ -7,9 +7,9 @@ events {
     worker_connections 10240;
 }
 
-
-env SHARED_TTL=300;
 env SOCKET_API=$wafcdn_socket_api;
+env SHARED_TTL=300;
+env DOMAIN_TTL=60;
 env CACHE_DIR=$wafcdn_cache_dir;
 env UPCACHE_LIMIT_COUNT=10;
 

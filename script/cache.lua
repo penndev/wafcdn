@@ -4,7 +4,7 @@ local json = require("cjson")
 local ngx = require("ngx")
 
 local upcacheurl = init.socketapi .. "/socket/cacheup"
-local sharedttl = init.sharedttl
+local sharedttl = init.sharedttl -- 单独的缓存周期。
 local upcachelimit = init.upcachelimit
 
 local socketClient = function(premature, data)
