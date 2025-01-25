@@ -3,3 +3,4 @@
 .cache.db
 conf/nginx.conf
 *.exe*
+*.bkp
