@@ -1,8 +1,0 @@
-[package]
-name = "node"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-async-trait="0.1"
-pingora = { version = "0.3", features = [ "lb" ] }
