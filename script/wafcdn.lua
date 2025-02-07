@@ -1,16 +1,37 @@
-local ssl = require("ssl")
-local rewrite = require("rewrite")
-local backend = require("backend")
-local cache = require("cache")
+local ngx = require("ngx")
+local response = require("response")
+local util = require("util")
+local filter = require("filter")
 
-return {
-    ssl = ssl.setup,
-    main = rewrite.setup,
-    backaccess = backend.access,
-    backhead = backend.header,
-    backbody = backend.body,
-    backlog = backend.log,
-    cacheaccess = cache.access,
-    cachehead = cache.header,
-    cachelog = cache.log,
-}
+local WAFCDN = {}
+
+function WAFCDN.rewrite()
+    local host = ngx.var.host
+    if not host then
+        response.status400()
+        return
+    end
+    -- 获取后台配置
+    local res, err = util.request( "/@wafcdn/domain", {args={host=host}})
+    if res == nil then
+        response.status404()
+        return
+    end
+    -- rate单链接限速，并发请求限速。
+    local qps = res.body.limit.queries / res.body.limit.seconds
+    local allow = filter.limit(res.body.limit.rate, qps, res.body.limit.queries)
+    if not allow then 
+        response.status419()
+        return
+    end
+    -- 
+    ngx.ctx.domain = res.body
+end
+
+function WAFCDN.access()
+    -- 访问静态文件
+    -- 访问反向代理
+    ngx.say(util.json_encode(ngx.ctx.domain) )
+end
+
+return WAFCDN

@@ -1,22 +1,36 @@
--- 公共方法模块
+local ngx = require("ngx")
+local cjson = require("cjson")
 
----清除字符串首尾的空格和字符
----@param val string
----@return string
-local function trim(val)
-    return string.match(val, "^%s*(.*%S)")
+-- json编码器
+local json_encode = cjson.encode
+
+-- json解码器
+local function json_decode(str)
+    local ok, t = pcall(cjson.decode, str)
+    if not ok then
+      return nil
+    end
+    return t
 end
 
----返回经过处理env文件
----@param key string
----@return string?
----@nodiscard
-local function getenv(key)
-    return os.getenv(key)
+-- 发起网络请求
+local function request(uri, opt)
+    local res = ngx.location.capture(uri, opt)
+    if res.truncated ~= false then
+        return nil, 'res.truncated true'
+    end
+    if res.status ~= 200 then
+        return nil, 'res.status ' + res.status
+    end
+    local body = json_decode(res.body)
+    if body == nil then 
+        return nil, 'json_decode decode fail'
+    end
+    return {header = res.header, body = body}, nil
 end
-
 
 return {
-    getenv=getenv,
-    trim=trim,
+    request = request,
+    json_encode = json_encode,
+    json_decode = json_decode
 }
