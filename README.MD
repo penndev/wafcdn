@@ -4,7 +4,7 @@
 
 ## WAF功能 ×
 
-- 修改配置后快速生效
+
 - 单连接限速
 - QPS限制
 - CC防御
@@ -28,6 +28,12 @@
 - 缓存管理 预加载，清理。
 - 运行监控服务器的运行情况等功能。
 
+
+## openresty 生命周期图
+
+![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
+
 ## 环境安装
 
 自助安装脚本 https://gist.github.com/penndev/9f01b3864abe2368424d3a79f5efff7e
+

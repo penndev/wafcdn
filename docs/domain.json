@@ -1,0 +1,37 @@
+{
+    "site": 1,
+    "type": "proxy|static",
+    "limit": {
+        "rate": 300,
+        "queries": 2,
+        "seconds": 2
+    },
+    "security": {
+        "sign": {
+
+        },
+        "region": {
+
+        },
+        "token": {
+            
+        }
+    },
+    "header": {
+        "Custom-Header": "Response"
+    },
+    "proxy": {
+        "server ": ["127.0.0.1", "127.0.0.2"],
+        "cache": {
+            "arg": true,
+            "method": ["get","post"],
+            "expire": "2025-02-05 11:15:00"
+        },
+        "header": {
+            "Custom-Header": "Request"
+        }
+    },
+    "static": {
+        "root": "/usr/share/nginx/html"
+    }
+}

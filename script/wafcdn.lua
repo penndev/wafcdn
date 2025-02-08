@@ -17,6 +17,9 @@ function WAFCDN.rewrite()
         response.status404()
         return
     end
+
+    -- !IP黑名单
+
     -- rate单链接限速，并发请求限速。
     local qps = res.body.limit.queries / res.body.limit.seconds
     local allow = filter.limit(res.body.limit.rate, qps, res.body.limit.queries)
@@ -24,12 +27,18 @@ function WAFCDN.rewrite()
         response.status419()
         return
     end
-    -- 
+    
+    -- !IP区域控制
+
+    -- !接口验签
+
+    -- !JS人机校验
     ngx.ctx.domain = res.body
 end
 
 function WAFCDN.access()
     -- 访问静态文件
+    
     -- 访问反向代理
     ngx.say(util.json_encode(ngx.ctx.domain) )
 end
