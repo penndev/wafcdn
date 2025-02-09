@@ -4,6 +4,10 @@ local ngx = require("ngx")
 
 local filter = {}
 
+-- 限流函数：根据速率、QPS（每秒查询数）和突发值来控制流量
+-- @param rate number 允许的平均速率（单位：请求/秒）
+-- @param qps number 允许的最大 QPS（每秒查询数）
+-- @param burst number 允许的突发请求数（短时间内允许的最大请求数）也就是合计burst/qps秒内允许的最多请求。
 function filter.limit(rate, qps, burst)
     if qps > 0 then
         local lim, err = limit_req.new("limit_req", qps, burst)
@@ -29,5 +33,10 @@ function filter.limit(rate, qps, burst)
     end
     return true
 end
+
+function filter.sign()
+    
+end
+
 
 return filter

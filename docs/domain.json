@@ -8,13 +8,10 @@
     },
     "security": {
         "sign": {
-
-        },
-        "region": {
-
-        },
-        "token": {
-            
+            "status": false,
+            "method": "HMACMD5",
+            "timeargs": "t",
+            "signargs": "s"
         }
     },
     "header": {

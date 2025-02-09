@@ -30,9 +30,14 @@ function WAFCDN.rewrite()
     
     -- !IP区域控制
 
-    -- !接口验签
+    -- 接口验签
+    if res.body.security.status == true then 
+        filter.sign()
+    end
 
     -- !JS人机校验
+    --  ...
+
     ngx.ctx.domain = res.body
 end
 
