@@ -37,3 +37,6 @@
 
 自助安装脚本 https://gist.github.com/penndev/9f01b3864abe2368424d3a79f5efff7e
 
+
+## 快速开发调试重启
+openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./

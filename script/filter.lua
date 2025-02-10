@@ -34,8 +34,11 @@ function filter.limit(rate, qps, burst)
     return true
 end
 
-function filter.sign()
-    
+-- 验证get签名函数
+-- @param method
+    -- 
+function filter.sign(method, timeargs, signargs)
+
 end
 
 
