@@ -32,7 +32,7 @@ function WAFCDN.rewrite()
 
     -- 接口验签
     if res.body.security.status == true then 
-        filter.sign()
+        filter.sign(res.body.security.method, res.body.security.timeargs, res.body.security.signargs)
     end
 
     -- !JS人机校验
