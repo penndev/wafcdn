@@ -1,17 +1,21 @@
 {
     "site": 1,
     "type": "proxy|static",
-    "limit": {
-        "rate": 300,
-        "queries": 2,
-        "seconds": 2
-    },
+
     "security": {
+        "limit": {
+            "status": true,
+            "rate": 300,
+            "queries": 2,
+            "seconds": 2
+        },
         "sign": {
-            "status": false,
+            "status": true,
+            "key": "wafcdn",
             "method": "HMACMD5",
             "timeargs": "t",
-            "signargs": "s"
+            "signargs": "s",
+            "expires": 150
         }
     },
     "header": {

@@ -39,4 +39,10 @@
 
 
 ## 快速开发调试重启
+
 openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
+
+## openssl 依赖
+https://github.com/fffonion/lua-resty-openssl
+
+标准UTC0时区时间 Math.ceil(Date.now()/1000) + (new Date().getTimezoneOffset() * 60)

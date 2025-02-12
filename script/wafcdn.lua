@@ -14,25 +14,32 @@ function WAFCDN.rewrite()
     -- 获取后台配置
     local res, err = util.request( "/@wafcdn/domain", {args={host=host}})
     if res == nil then
-        response.status(404, "02")
+        response.status(404, "Not Found")
         return
     end
 
     -- !IP黑名单
 
     -- rate单链接限速，并发请求限速。
-    local qps = res.body.limit.queries / res.body.limit.seconds
-    local allow = filter.limit(res.body.limit.rate, qps, res.body.limit.queries)
-    if not allow then 
-        response.status(419, "03")
-        return
+    if res.body.security.limit.status == true then
+        local limit = res.body.security.limit
+        local qps = limit.queries / limit.seconds
+        local allow = filter.limit(limit.rate, qps, limit.queries)
+        if not allow then
+            response.status(429, "Too Many Requests")
+            return
+        end
     end
-    
     -- !IP区域控制
 
     -- 接口验签
-    if res.body.security.status == true then 
-        filter.sign(res.body.security.method, res.body.security.timeargs, res.body.security.signargs)
+    if res.body.security.sign.status == true then
+        local sign = res.body.security.sign
+        local allow, err = filter.sign(sign.method, sign.key, sign.timeargs, sign.signargs, sign.expires)
+        if not allow then
+            response.status(403, "Forbidden " .. err)
+            return
+        end
     end
 
     -- !JS人机校验
@@ -47,8 +54,16 @@ function WAFCDN.access()
     ngx.say(util.json_encode(ngx.ctx.domain) )
     ngx.say(os.date("!%Y-%m-%d %H:%M:%S"))
     -- 
-    local str = util.hmac('md5', 'wafcdn', '123456')
-    ngx.say(str)
+end
+
+function WAFCDN.log()
+    -- 获取客户端 IP 地址
+    local ip = ngx.var.remote_addr
+    local request_method = ngx.var.request_method
+    local request_uri = ngx.var.request_uri
+    local status = ngx.var.status
+    local time = ngx.localtime()
+    ngx.log(ngx.ERR, "Time: ", time, " | IP: ", ip, " | Method: ", request_method, " | URI: ", request_uri, " | Status: ", status)
 end
 
 return WAFCDN

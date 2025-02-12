@@ -40,8 +40,10 @@ local function request(uri, opt)
     return {header = res.header, body = body}, nil
 end
 
-
-local function _hmac_tostring(c) return string.format("%02x", string.byte(c)) end
+-- base64 url编码
+local function base64_url_encode(char)
+    return ngx.encode_base64(char):gsub("+", "-"):gsub("/", "_"):gsub("=", "")
+end
 
 -- hmac算法
 -- @param method hmac算法
@@ -52,12 +54,13 @@ local function hmac(method, key, message)
     local hmac_method = openssl_hmac.new(key, method)
     hmac_method:update(message)
     local hmac_result = hmac_method:final()
-    return hmac_result:gsub(".", _hmac_tostring)
+    -- return base64_url_encode(hmac_result)
 end
 
 return {
     json_encode = json_encode,
     json_decode = json_decode,
+    base64_url_encode = base64_url_encode,
     request = request,
     hmac = hmac
 }
