@@ -35,7 +35,7 @@ function filter.limit(rate, qps, burst)
     return true
 end
 
--- 验证get签名函数
+-- 进行get签名验证
 -- @param method
     -- md5
     -- sha1
@@ -44,45 +44,47 @@ end
 -- @param signargs 签名参数名称
 -- @return allow bool 是否放行
 -- @return err nil 错误描述 timebefore timeafter
-function filter.sign(method, key, timeargs, signargs, expires)
+function filter.sign(method, key, expireargs, signargs)
     -- 默认args已经排序
     local args, err = ngx.req.get_uri_args()
     if not args then --if err == "truncated" then
-        return false, 'nil_get_args'
+        return false, 'no_args'
     end
 
-    -- 设置请求过期，重放攻击等防御
-    if args[timeargs] == nil then 
-        return false, 'nil_args_timeargs('..timeargs..')'
+    -- 设置请求过期。
+    if not args[expireargs] then 
+        return false, 'no_args_expire'
     end
-
-    -- 请求有固定的窗口期
-        -- 请求时间 < 服务器时间    过时的请求 - deny
-        -- 请求时间 > 过期时间      未来的请求 - deny
-        -- 请求时间 in 服务器时间+超时时间    请求窗口放行 - allow
-    -- 时间冗余 5 秒
-        -- 服务器时间比标准快
-        -- 客户端时间比标准慢
-        -- 请求损耗阻塞时间过长
-    local req_time = tonumber(args[timeargs])
+    local expire_time = tonumber(args[expireargs])
     local current_time = os.time(os.date("!*t"))
-    if (req_time < current_time - 5) then
-        -- ================== 500 开发调试记住关掉
-        return false, "timebefore"
-    else if (req_time > current_time + tonumber(expires)) then
-        return false, "timeafter"
+    if (expire_time < current_time) then
+        return false, "expire"
     end
-    -- 时间验证通过
-    
-    ngx.say(util.json_encode(args))
 
-    ngx.say(current_time, " time ", req_time)
-    -- ngx.say("<br/>")
-    -- local str = util.hmac('md5', key, '123456')
-    -- ngx.say(str)
+    -- 设置签名校验
+    if not args[signargs] then 
+        return false, 'no_args_sign'
+    end
+    local slicestr = expireargs.."="..args[expireargs].."&"..signargs.."="..args[signargs]
+    local startpos, endpos = string.find(ngx.var.request_uri, slicestr)
+    if endpos ~= string.len(ngx.var.request_uri) then
+        return false, 'sign_no_end'
+    end
+    local pos = startpos + string.len(expireargs.."="..args[expireargs])
+    local origin_uri = string.sub(ngx.var.request_uri, 0, pos - 1)
+    local secret = ''
+    if method == 'HMAC_MD5' then
+        secret = util.hmac('md5', key, origin_uri)
+    elseif method == 'HMAC_SHA1' then
+        secret = util.hmac('sha1', key, origin_uri)
+    else
+        return false, 'sign_no_method'
+    end
+    local base_secret = util.base64_url_encode(secret)
+    if base_secret ~= args[signargs] then
+        return false, 'sign_fail'
+    end
     return true
 end
-
-
 
 return filter

@@ -1,22 +1,23 @@
 {
     "site": 1,
-    "type": "proxy|static",
-
+    "type": "static",
     "security": {
         "limit": {
-            "status": true,
+            "status": false,
             "rate": 300,
             "queries": 2,
             "seconds": 2
         },
         "sign": {
-            "status": true,
+            "status": false,
+            "method": "HMAC_MD5",
             "key": "wafcdn",
-            "method": "HMACMD5",
-            "timeargs": "t",
-            "signargs": "s",
-            "expires": 150
+            "expireargs": "t",
+            "signargs": "s"
         }
+    },
+    "static": {
+        "root": "/usr/share/nginx/html"
     },
     "header": {
         "Custom-Header": "Response"
@@ -31,8 +32,6 @@
         "header": {
             "Custom-Header": "Request"
         }
-    },
-    "static": {
-        "root": "/usr/share/nginx/html"
     }
+
 }

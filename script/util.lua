@@ -53,8 +53,7 @@ end
 local function hmac(method, key, message)
     local hmac_method = openssl_hmac.new(key, method)
     hmac_method:update(message)
-    local hmac_result = hmac_method:final()
-    -- return base64_url_encode(hmac_result)
+    return hmac_method:final()
 end
 
 return {
