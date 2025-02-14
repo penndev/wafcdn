@@ -5,6 +5,7 @@ local openssl_hmac = require("resty.openssl.hmac")
 -- json编码器
 -- @param any
 -- @return string
+cjson.encode_escape_forward_slash(false)
 local json_encode = cjson.encode
 
 -- json解码器
@@ -12,13 +13,14 @@ local json_encode = cjson.encode
 -- @return 
     -- nil 
     -- any
-local function json_decode(str)
-    local ok, t = pcall(cjson.decode, str)
-    if not ok then
-      return nil
-    end
-    return t
-end
+local json_decode = cjson.decode
+-- local function json_decode(str)
+--     local ok, t = pcall(cjson.decode, str)
+--     if not ok then
+--       return nil
+--     end
+--     return t
+-- end
 
 -- 发起网络请求
 -- https://github.com/openresty/lua-nginx-module?tab=readme-ov-file#ngxlocationcapture

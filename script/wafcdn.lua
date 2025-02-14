@@ -46,20 +46,21 @@ function WAFCDN.rewrite()
             return
         end
     end
-
+    
+    -- 从其他地方重定向过来的-进行/rewrite修复
+    if string.sub(ngx.var.uri, 0, 9) == "/rewrite/" then
+        if string.sub(ngx.var.request_uri, 0, 9) ~= "/rewrite/" then 
+            ngx.req.set_uri(string.sub(ngx.var.uri, 9), false)
+        end
+    end
 
     ngx.var.wafcdn_site = res.body.site
-
     -- 
     -- 路由
     -- 
     if res.body.type == "static" then
         ngx.var.wafcdn_static = util.json_encode(res.body.static)
-        ngx.req.set_uri("/@static" .. ngx.var.request_uri, true)
-        return
-    elseif res.body.type == "proxy" then
-        ngx.var.wafcdn_proxy = util.json_encode(res.body.proxy)
-        ngx.req.set_uri("/@proxy" .. ngx.var.request_uri, true)
+        ngx.req.set_uri("/@static" .. ngx.var.uri, true)
         return
     else 
         response.status(403, "SiteType")
@@ -67,11 +68,37 @@ function WAFCDN.rewrite()
     end
 end
 
-
-function WAFCDN.access_static()
-    ngx.log(ngx.ERR, "penndev->", ngx.var.wafcdn_site, "<>")
+-- 静态文件目录访问
+local static_start = string.len("/@static") + 1
+function WAFCDN.static_access()
+    -- 用户直接输入访问 /@static
+    if ngx.var.wafcdn_static == "" then 
+        ngx.exec("/rewrite"..ngx.var.uri)
+        return
+    end
+    -- 修复移除添加路由的
+    ngx.req.set_uri(string.sub(ngx.var.uri, static_start), false)
+    local static = util.json_decode(ngx.var.wafcdn_static)
+    -- 静态文件目录
+    ngx.var.static_root = static.root
     return
 end
+
+-- 静态文件目录访问
+local proxy_start = string.len("/@proxy") + 1
+function WAFCDN.proxy_access()
+    if ngx.var.wafcdn_proxy == "" then 
+        ngx.exec("/rewrite"..ngx.var.uri)
+        return
+    end
+    
+    ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
+    local proxy = util.json_decode(ngx.var.wafcdn_proxy)
+
+    ngx.say(util.json_encode(proxy))
+    return
+end
+
 
 
 function WAFCDN.log(location)
