@@ -1,6 +1,6 @@
 {
     "site": 1,
-    "type": "static",
+    "type": "proxy",
     "security": {
         "limit": {
             "status": false,
@@ -19,11 +19,9 @@
     "static": {
         "root": "/usr/share/nginx/html"
     },
-    "header": {
-        "Custom-Header": "Response"
-    },
     "proxy": {
-        "server ": ["127.0.0.1", "127.0.0.2"],
+        "server": "http://127.0.0.1:8000",
+        "host": "www.baidu.com",
         "cache": {
             "arg": true,
             "method": ["get","post"],
@@ -32,6 +30,8 @@
         "header": {
             "Custom-Header": "Request"
         }
+    },
+    "header": {
+        "Custom-Header": "Response"
     }
-
 }

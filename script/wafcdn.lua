@@ -23,7 +23,7 @@ function WAFCDN.rewrite()
     -- 获取后台配置
     local res, err = util.request( "/@wafcdn/domain", {args={host=ngx.var.host}})
     if res == nil then
-        response.status(404, "Not Found")
+        response.status(406, "Domain Not Found")
         return
     end
     
@@ -47,7 +47,9 @@ function WAFCDN.rewrite()
         end
     end
     
-    -- 从其他地方重定向过来的-进行/rewrite修复
+    -- 从其他地方重定向过来的 会在原本请求url中添加 /rewrite
+    -- 但是ngx.var.request_uri未改变，
+    -- 所以可以对比开头来判断是否是重定向过来的
     if string.sub(ngx.var.uri, 0, 9) == "/rewrite/" then
         if string.sub(ngx.var.request_uri, 0, 9) ~= "/rewrite/" then 
             ngx.req.set_uri(string.sub(ngx.var.uri, 9), false)
@@ -62,6 +64,11 @@ function WAFCDN.rewrite()
         ngx.var.wafcdn_static = util.json_encode(res.body.static)
         ngx.req.set_uri("/@static" .. ngx.var.uri, true)
         return
+    elseif res.body.type == "proxy" then
+        ngx.var.wafcdn_proxy = util.json_encode(res.body.proxy)
+        -- ngx.say(ngx.var.wafcdn_proxy)
+        ngx.req.set_uri("/@proxy" .. ngx.var.uri, true)
+        return
     else 
         response.status(403, "SiteType")
         return
@@ -69,7 +76,7 @@ function WAFCDN.rewrite()
 end
 
 -- 静态文件目录访问
-local static_start = string.len("/@static") + 1
+
 function WAFCDN.static_access()
     -- 用户直接输入访问 /@static
     if ngx.var.wafcdn_static == "" then 
@@ -77,25 +84,36 @@ function WAFCDN.static_access()
         return
     end
     -- 修复移除添加路由的
+    local static_start = string.len("/@static") + 1
     ngx.req.set_uri(string.sub(ngx.var.uri, static_start), false)
     local static = util.json_decode(ngx.var.wafcdn_static)
     -- 静态文件目录
-    ngx.var.static_root = static.root
+    ngx.var.wafcdn_static_root = static.root
     return
 end
 
 -- 静态文件目录访问
-local proxy_start = string.len("/@proxy") + 1
 function WAFCDN.proxy_access()
     if ngx.var.wafcdn_proxy == "" then 
         ngx.exec("/rewrite"..ngx.var.uri)
         return
     end
-    
+    -- ngx.var.wafcdn_proxy = '{"header":{"Custom-Header":"Request"},"host":"www.baidu.com","server ":"http://127.0.0.1:8000","cache":{"method":["get","post"],"expire":"2025-02-05 11:15:00","arg":true}}'
+
+    local proxy_start = string.len("/@proxy") + 1
     ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
 
-    ngx.say(util.json_encode(proxy))
+    ngx.var.wafcdn_proxy_server = proxy.server
+    ngx.var.wafcdn_proxy_host = proxy.host
+
+    -- 自定义请求头
+    for key, val in pairs(proxy.header) do
+        ngx.req.set_header(key, val)
+    end
+
+    -- 请求缓存问题
+
     return
 end
 
