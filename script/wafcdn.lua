@@ -98,8 +98,6 @@ function WAFCDN.proxy_access()
         ngx.exec("/rewrite"..ngx.var.uri)
         return
     end
-    -- ngx.var.wafcdn_proxy = '{"header":{"Custom-Header":"Request"},"host":"www.baidu.com","server ":"http://127.0.0.1:8000","cache":{"method":["get","post"],"expire":"2025-02-05 11:15:00","arg":true}}'
-
     local proxy_start = string.len("/@proxy") + 1
     ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
@@ -112,11 +110,16 @@ function WAFCDN.proxy_access()
         ngx.req.set_header(key, val)
     end
 
-    -- 请求缓存问题
+    -- 请求缓存匹配
+
+
 
     return
 end
 
+function WAFCDN.proxy_upstream()
+    ngx.say(ngx.ctx.wafcdn_proxy_backend)
+end
 
 
 function WAFCDN.log(location)
