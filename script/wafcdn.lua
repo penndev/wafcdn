@@ -2,9 +2,9 @@ local ngx = require("ngx")
 local response = require("response")
 local util = require("util")
 local filter = require("filter")
+local balancer = require("ngx.balancer")
 
 local WAFCDN = {}
-
 
 function WAFCDN.rewrite()
     local host = ngx.var.host
@@ -76,7 +76,6 @@ function WAFCDN.rewrite()
 end
 
 -- 静态文件目录访问
-
 function WAFCDN.static_access()
     -- 用户直接输入访问 /@static
     if ngx.var.wafcdn_static == "" then 
@@ -102,7 +101,10 @@ function WAFCDN.proxy_access()
     ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
 
-    ngx.var.wafcdn_proxy_server = proxy.server
+    ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
+    ngx.ctx.wafcdn_proxy_backend = proxy.server
+
+
     ngx.var.wafcdn_proxy_host = proxy.host
 
     -- 自定义请求头
@@ -117,8 +119,27 @@ function WAFCDN.proxy_access()
     return
 end
 
+-- 反向代理连接池
+-- @param
+    -- ngx.ctx.wafcdn_proxy_backend:[host:port] = "127.0.0.1:80"
+    -- 
 function WAFCDN.proxy_upstream()
-    ngx.say(ngx.ctx.wafcdn_proxy_backend)
+    -- 上游服务器
+    local ip, port = string.match(ngx.ctx.wafcdn_proxy_backend, "([^:]+):(%d+)")
+    -- SNI后端是https的话需要第三个参数host
+    local ok, err = balancer.set_current_peer(ip, port)
+    if not ok then
+        ngx.log(ngx.ERR, "failed to set the current peer: ", err)
+        return ngx.exit(500)
+    end
+    -- 上游连接池
+    -- ok, err = balancer.enable_keepalive(idle_timeout?, max_requests?)
+    ok, err = balancer.enable_keepalive()
+    if not ok then
+        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+        return
+    end
+
 end
 
 
