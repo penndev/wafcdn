@@ -91,7 +91,12 @@ function WAFCDN.static_access()
     return
 end
 
--- 静态文件目录访问
+-- 反向代理文件目录访问
+-- @request
+    -- ngx.var.wafcdn_proxy 配置的json字符串防止内部跳转ctx丢失
+-- @set 
+    -- ngx.var.wafcdn_proxy_server 动态回源协议
+    -- ngx.var.wafcdn_proxy_host 回源host
 function WAFCDN.proxy_access()
     if ngx.var.wafcdn_proxy == "" then 
         ngx.exec("/rewrite"..ngx.var.uri)
@@ -101,20 +106,30 @@ function WAFCDN.proxy_access()
     ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
 
+    -- 回源协议是否是https
+    -- 回源请求头
     ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
-    ngx.ctx.wafcdn_proxy_backend = proxy.server
-
-
-    ngx.var.wafcdn_proxy_host = proxy.host
-
-    -- 自定义请求头
+    if proxy.protocol == "https" then
+        ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
+    end
+    ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
+    ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
+    ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
+    ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
     for key, val in pairs(proxy.header) do
         ngx.req.set_header(key, val)
     end
-
-    -- 请求缓存匹配
-
-
+    if proxy.host ~= "" then
+        ngx.var.wafcdn_proxy_host = proxy.host
+    end
+    
+    -- 设置反向代理连接池
+    ngx.ctx.wafcdn_proxy_upstream = {
+        server = proxy.server,
+        host = proxy.host,
+        keepalive_timeout = proxy.keepalive_timeout,
+        keepalive_requests = proxy.keepalive_requests
+    }
 
     return
 end
@@ -125,20 +140,24 @@ end
     -- 
 function WAFCDN.proxy_upstream()
     -- 上游服务器
-    local ip, port = string.match(ngx.ctx.wafcdn_proxy_backend, "([^:]+):(%d+)")
+    local ip, port = string.match(ngx.ctx.wafcdn_proxy_upstream.server, "([^:]+):(%d+)")
     -- SNI后端是https的话需要第三个参数host
-    local ok, err = balancer.set_current_peer(ip, port)
+    -- ok, err = balancer.set_current_peer(host, port, host?)
+    local ok, err = balancer.set_current_peer(ip, port, ngx.ctx.wafcdn_proxy_upstream.host)
     if not ok then
         ngx.log(ngx.ERR, "failed to set the current peer: ", err)
         return ngx.exit(500)
     end
     -- 上游连接池
     -- ok, err = balancer.enable_keepalive(idle_timeout?, max_requests?)
-    ok, err = balancer.enable_keepalive()
+    ok, err = balancer.enable_keepalive(
+        ngx.ctx.wafcdn_proxy_upstream.keepalive_timeout, 
+        ngx.ctx.wafcdn_proxy_upstream.keepalive_requests
+    )
     if not ok then
         ngx.log(ngx.ERR, "failed to set keepalive: ", err)
         return
-    end
+    end 
 
 end
 
