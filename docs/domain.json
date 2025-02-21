@@ -20,14 +20,20 @@
         "root": "/usr/share/nginx/html"
     },
     "proxy": {
-        "protocol": "https",
-        "server": "107.151.72.198:443",
+        "protocol": "http",
+        "server": "107.151.72.198:80",
         "host": "a.mgzx1.xyz",
         "keepalive_timeout": 15,
         "keepalive_requests": 30,
         "header": {
             "Name": "Wafcdn"
-        }
+        },
+        "cache": [
+            {
+                "ruth": "/",
+                "time": 500
+            }
+        ]
     },
     "header": {
         "Custom-Header": "Response"

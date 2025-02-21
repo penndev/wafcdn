@@ -91,7 +91,8 @@ function WAFCDN.static_access()
     return
 end
 
--- 反向代理文件目录访问
+-- 反向代理配置
+-- 查看缓存命中还是后端请求
 -- @request
     -- ngx.var.wafcdn_proxy 配置的json字符串防止内部跳转ctx丢失
 -- @set 
@@ -123,6 +124,17 @@ function WAFCDN.proxy_access()
         ngx.var.wafcdn_proxy_host = proxy.host
     end
     
+    local cache_time = 0 --缓存过期时间秒
+    if proxy.cache then
+        for _, cache in ipairs(proxy.cache) do
+            if cache.ruth and ngx.var.uri:match(cache.ruth) then
+                cache_time = cache.time
+                break
+            end
+        end
+    end
+    ngx.say(cache_time)
+
     -- 设置反向代理连接池
     ngx.ctx.wafcdn_proxy_upstream = {
         server = proxy.server,
@@ -130,7 +142,6 @@ function WAFCDN.proxy_access()
         keepalive_timeout = proxy.keepalive_timeout,
         keepalive_requests = proxy.keepalive_requests
     }
-
     return
 end
 
