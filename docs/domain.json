@@ -31,7 +31,10 @@
         "cache": [
             {
                 "ruth": "/",
-                "time": 500
+                "time": 500,
+                "args": true,
+                "method": ["GET", "POST"],
+                "status": [200, 301]
             }
         ]
     },
