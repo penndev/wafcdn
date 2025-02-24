@@ -28,17 +28,8 @@ local util = {
 -- wafcdn_api = "127.0.0.1:8080"
 local wafcdn_api = os.getenv("WAFCDN_API")
 function util.request(uri, opt)
-    if opt.vars == nil then opt.vars = {} end
-    opt.vars.wafcdn_proxy = util.json_encode({
-        protocol = "http",
-        server = "127.0.0.1:8000",
-        keepalive_timeout = 15,
-        keepalive_requests = 30,
-        header = {},
-        cache = {}
-    })
     local res = ngx.location.capture(uri, opt)
-    ngx.log(ngx.ERR, "penndev1", util.json_encode(res))
+    ngx.log(ngx.ERR, util.json_encode(res))
     if res.truncated ~= false then
         return nil, 'res.truncated true'
     end

@@ -17,27 +17,12 @@ function WAFCDN_PROXY.rewrite()
         ngx.exec("/rewrite"..ngx.var.uri)
         return
     end
-    local proxy_start = string.len("/@proxy") + 1
+    local proxy_start = 8 --string.len("/@proxy") + 1
     ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
 
-    -- 回源请求头 
-    -- 默认 ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
-    -- 回源协议是否是https
-    if proxy.protocol == "https" then
-        ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
-    end
-    ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
-    ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
-    ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
-    ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
-    for key, val in pairs(proxy.header) do
-        ngx.req.set_header(key, val)
-    end
-    if proxy.host then
-        ngx.var.wafcdn_proxy_host = proxy.host
-    end
-
+    
+    -- 请求缓存处理
     ngx.ctx.wafcdn_proxy_cache = { time = 0, key = "", status = {} }
     if proxy.cache then
         for _, cache in ipairs(proxy.cache) do
@@ -65,9 +50,39 @@ function WAFCDN_PROXY.rewrite()
         -- return
     end
     
+
+    if proxy.keepalive_requests == 0 then
+        ngx.var.wafcdn_proxy_server = proxy.server
+    else
+        local protocol, ip, port = string.match(url, "^(%w+)://([^:/]+):?(%d*)$")
+        -- 移动到这里
+    end
+
+    -- 回源Host
+    if proxy.host then
+        ngx.var.wafcdn_proxy_host = proxy.host
+    end
+
+    -- 默认 ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
+    -- 回源协议是否是https
+    if proxy.protocol == "https" then
+        ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
+    end
+    ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
+    ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
+    ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
+    ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
+    -- 回源请求头 
+    for key, val in pairs(proxy.header) do
+        ngx.req.set_header(key, val)
+    end
+
+
+
     -- 设置反向代理连接池
     ngx.ctx.wafcdn_proxy_upstream = {
-        server = proxy.server,
+        server_ip = proxy.server,
+        server_port = proxy.server,
         host = proxy.host,
         keepalive_timeout = proxy.keepalive_timeout,
         keepalive_requests = proxy.keepalive_requests
@@ -91,15 +106,16 @@ function WAFCDN_PROXY.balancer()
     end
     -- 上游连接池
     -- ok, err = balancer.enable_keepalive(idle_timeout?, max_requests?)
-    ok, err = balancer.enable_keepalive(
-        ngx.ctx.wafcdn_proxy_upstream.keepalive_timeout, 
-        ngx.ctx.wafcdn_proxy_upstream.keepalive_requests
-    )
-    if not ok then
-        ngx.log(ngx.ERR, "failed to set keepalive: ", err)
-        return
-    end 
-
+    if ngx.ctx.wafcdn_proxy_upstream.keepalive_requests > 0 then
+        ok, err = balancer.enable_keepalive(
+            ngx.ctx.wafcdn_proxy_upstream.keepalive_timeout, 
+            ngx.ctx.wafcdn_proxy_upstream.keepalive_requests
+        )
+        if not ok then
+            ngx.log(ngx.ERR, "failed to set keepalive: ", err)
+            return
+        end         
+    end
 end
 
 

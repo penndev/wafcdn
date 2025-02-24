@@ -1,1 +1,2 @@
-print("运行了init")
+require("wafcdn")
+require("wafcdn_proxy")

@@ -7,6 +7,8 @@ local balancer = require("ngx.balancer")
 local WAFCDN = {}
 
 function WAFCDN.rewrite()
+    ngx.log(ngx.ERR, "WAFCDN.rewrite")
+
     local host = ngx.var.host
     if not host then
         response.status(400, "01")
@@ -14,7 +16,20 @@ function WAFCDN.rewrite()
     end
 
     -- 获取后台配置
-    local res, err = util.request( "/@proxy/@wafcdn/domain", {args={host=ngx.var.host}})
+    local res, err = util.request("/@proxy/@wafcdn/domain", {
+        args={
+            host=ngx.var.host
+        },
+        vars={
+            wafcdn_proxy = util.json_encode({
+                server = "http://127.0.0.1:8000",
+                keepalive_timeout = 0,
+                keepalive_requests = 0,
+                header = {},
+                cache = {}
+            })
+        }
+    })
     if res == nil then
         response.status(406, "Domain Not Found")
         return

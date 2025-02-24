@@ -20,9 +20,8 @@
         "root": "/usr/share/nginx/html"
     },
     "proxy": {
-        "protocol": "http",
-        "server": "107.151.72.198:80",
-        "host": "a.mgzx1.xyz",
+        "server": "https://64.233.170.99:443",
+        "host": "www.google.com",
         "keepalive_timeout": 15,
         "keepalive_requests": 30,
         "header": {
