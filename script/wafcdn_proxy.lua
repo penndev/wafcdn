@@ -50,43 +50,41 @@ function WAFCDN_PROXY.rewrite()
         -- return
     end
     
-
+    -- 反向代理连接方式
+    -- pass_proxy or upstream
+    -- 不需要连接池
     if proxy.keepalive_requests == 0 then
+        ngx.log(ngx.ERR, "proxy.server <<", proxy.server, ">>")
         ngx.var.wafcdn_proxy_server = proxy.server
     else
-        local protocol, ip, port = string.match(url, "^(%w+)://([^:/]+):?(%d*)$")
-        -- 移动到这里
+        local protocol, ip, port = string.match(proxy.server, "^(%w+)://([^:/]+):?(%d*)$")
+        -- 默认 ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
+        if protocol == "https" then -- 回源协议是否是https
+            ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
+        end
+        -- 设置反向代理连接池
+        ngx.ctx.wafcdn_proxy_upstream = {
+            ip = ip,
+            port = port,
+            host = proxy.host,
+            keepalive_timeout = proxy.keepalive_timeout,
+            keepalive_requests = proxy.keepalive_requests
+        }
     end
 
-    -- 回源Host
-    if proxy.host then
-        ngx.var.wafcdn_proxy_host = proxy.host
-    end
-
-    -- 默认 ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
-    -- 回源协议是否是https
-    if proxy.protocol == "https" then
-        ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
-    end
+    -- 设置回源请求头
     ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
     ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
     ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
     ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
-    -- 回源请求头 
+    -- 自定义回源请求头 
     for key, val in pairs(proxy.header) do
         ngx.req.set_header(key, val)
     end
+    if proxy.host then -- 回源Host
+        ngx.var.wafcdn_proxy_host = proxy.host
+    end
 
-
-
-    -- 设置反向代理连接池
-    ngx.ctx.wafcdn_proxy_upstream = {
-        server_ip = proxy.server,
-        server_port = proxy.server,
-        host = proxy.host,
-        keepalive_timeout = proxy.keepalive_timeout,
-        keepalive_requests = proxy.keepalive_requests
-    }
     return
 end
     
@@ -95,11 +93,18 @@ end
     -- ngx.ctx.wafcdn_proxy_backend = "127.0.0.1:80" - 服务器
     -- ngx.ctx.wafcdn_proxy_upstream.host = "github.com" - 证书用
 function WAFCDN_PROXY.balancer()
-    -- 上游服务器
-    local ip, port = string.match(ngx.ctx.wafcdn_proxy_upstream.server, "([^:]+):(%d+)")
+    if not ngx.ctx.wafcdn_proxy_upstream then
+        ngx.log(ngx.ERR, "ngx.ctx.wafcdn_proxy_upstream nil")
+        return ngx.exit(428)
+    end
+
     -- SNI后端是https的话需要第三个参数host
     -- ok, err = balancer.set_current_peer(host, port, host?)
-    local ok, err = balancer.set_current_peer(ip, port, ngx.ctx.wafcdn_proxy_upstream.host)
+    local ok, err = balancer.set_current_peer(
+        ngx.ctx.wafcdn_proxy_upstream.ip, 
+        ngx.ctx.wafcdn_proxy_upstream.port, 
+        ngx.ctx.wafcdn_proxy_upstream.host
+    )
     if not ok then
         ngx.log(ngx.ERR, "failed to set the current peer: ", err)
         return ngx.exit(500)
@@ -114,7 +119,7 @@ function WAFCDN_PROXY.balancer()
         if not ok then
             ngx.log(ngx.ERR, "failed to set keepalive: ", err)
             return
-        end         
+        end
     end
 end
 
