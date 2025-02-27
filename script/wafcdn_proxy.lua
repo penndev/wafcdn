@@ -1,6 +1,7 @@
 local ngx = require("ngx")
 local util = require("util")
 local balancer = require("ngx.balancer")
+local response = require("response")
 
 local WAFCDN_PROXY = {}
 
@@ -13,6 +14,7 @@ local WAFCDN_PROXY = {}
     -- ngx.var.wafcdn_proxy_server 动态回源协议
     -- ngx.var.wafcdn_proxy_host 回源host
 function WAFCDN_PROXY.rewrite()
+    ngx.log(ngx.ERR, "proxy debug1 <<", ngx.var.wafcdn_proxy, ">>")
     if ngx.var.wafcdn_proxy == "" then 
         ngx.exec("/rewrite"..ngx.var.uri)
         return
@@ -21,7 +23,6 @@ function WAFCDN_PROXY.rewrite()
     ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
 
-    
     -- 请求缓存处理
     ngx.ctx.wafcdn_proxy_cache = { time = 0, key = "", status = {} }
     if proxy.cache then
@@ -47,20 +48,24 @@ function WAFCDN_PROXY.rewrite()
     if ngx.ctx.wafcdn_proxy_cache.time > 0 then
         -- 判断是否命中缓存
         -- 直接返回缓存内容
-        -- return
+        ngx.say(util.json_encode(ngx.ctx.wafcdn_proxy_cache),ngx.var.wafcdn_site)
+        return
     end
     
     -- 反向代理连接方式
     -- pass_proxy or upstream
-    -- 不需要连接池
-    if proxy.keepalive_requests == 0 then
-        ngx.log(ngx.ERR, "proxy.server <<", proxy.server, ">>")
+    if proxy.keepalive_requests == 0 then -- 走 pass_proxy
         ngx.var.wafcdn_proxy_server = proxy.server
     else
+        -- 走 upstream
         local protocol, ip, port = string.match(proxy.server, "^(%w+)://([^:/]+):?(%d*)$")
-        -- 默认 ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
-        if protocol == "https" then -- 回源协议是否是https
+        if protocol == "http" then
+            ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
+        elseif protocol == "https" then -- 回源协议是否是https
             ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
+        else
+            response.status(426, "proxy error")
+            return
         end
         -- 设置反向代理连接池
         ngx.ctx.wafcdn_proxy_upstream = {
@@ -84,10 +89,9 @@ function WAFCDN_PROXY.rewrite()
     if proxy.host then -- 回源Host
         ngx.var.wafcdn_proxy_host = proxy.host
     end
-
     return
 end
-    
+
 -- 反向代理连接池
 -- @param
     -- ngx.ctx.wafcdn_proxy_backend = "127.0.0.1:80" - 服务器

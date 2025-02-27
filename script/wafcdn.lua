@@ -16,7 +16,7 @@ function WAFCDN.rewrite()
     end
 
     -- 获取后台配置
-    local res, err = util.request("/@proxy/@wafcdn/domain", {
+    local res, err = util.request("/@debug/@wafcdn/domain", {
         args={
             host=ngx.var.host
         },
