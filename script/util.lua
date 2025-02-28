@@ -25,11 +25,8 @@ local util = {
 -- @param uri 请求网址
 -- @param table 请求描述
 -- @return table 返回体
--- wafcdn_api = "127.0.0.1:8080"
-local wafcdn_api = os.getenv("WAFCDN_API")
 function util.request(uri, opt)
     local res = ngx.location.capture(uri, opt)
-    ngx.log(ngx.ERR, util.json_encode(res))
     if res.truncated ~= false then
         return nil, 'res.truncated true'
     end
@@ -37,7 +34,7 @@ function util.request(uri, opt)
         return nil, 'res.status ' .. res.status
     end
     local body = util.json_decode(res.body)
-    if body == nil then 
+    if body == nil then
         return nil, 'json_decode decode fail'
     end
     return {header = res.header, body = body}, nil

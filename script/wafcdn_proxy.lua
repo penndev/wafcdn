@@ -5,16 +5,15 @@ local response = require("response")
 
 local WAFCDN_PROXY = {}
 
--- 反向代理配置 
+-- 反向代理配置
 -- !!! 必须使用rewrite 因为子请求会绕过access !!!
 -- 查看缓存命中还是后端请求
 -- @request
     -- ngx.var.wafcdn_proxy 配置的json字符串防止内部跳转ctx丢失
--- @set 
+-- @set
     -- ngx.var.wafcdn_proxy_server 动态回源协议
     -- ngx.var.wafcdn_proxy_host 回源host
 function WAFCDN_PROXY.rewrite()
-    ngx.log(ngx.ERR, "proxy debug1 <<", ngx.var.wafcdn_proxy, ">>")
     if ngx.var.wafcdn_proxy == "" then 
         ngx.exec("/rewrite"..ngx.var.uri)
         return
@@ -44,14 +43,19 @@ function WAFCDN_PROXY.rewrite()
             end
         end
     end
-    -- 缓存规则命中
+    -- 查询是否存在缓存文件，重定向到缓存。
     if ngx.ctx.wafcdn_proxy_cache.time > 0 then
-        -- 判断是否命中缓存
-        -- 直接返回缓存内容
-        ngx.say(util.json_encode(ngx.ctx.wafcdn_proxy_cache),ngx.var.wafcdn_site)
-        return
+        -- 判断是否命中缓存 - 200返回文件路径与header头
+        local res, err = util.request("/@debug/@wafcdn/cache", {
+            args={ site=ngx.var.wafcdn_site, key=ngx.ctx.wafcdn_proxy_cache.key, method=ngx.var.request_method },
+            vars={ wafcdn_proxy = util.json_encode({ server = "http://127.0.0.1:8000" })}
+        })
+        if res then -- 直接返回缓存内容
+            ngx.say(util.json_encode(res))
+            return
+        end
     end
-    
+
     -- 反向代理连接方式
     -- pass_proxy or upstream
     if proxy.keepalive_requests == 0 then -- 走 pass_proxy
@@ -69,9 +73,7 @@ function WAFCDN_PROXY.rewrite()
         end
         -- 设置反向代理连接池
         ngx.ctx.wafcdn_proxy_upstream = {
-            ip = ip,
-            port = port,
-            host = proxy.host,
+            ip = ip, port = port, host = proxy.host,
             keepalive_timeout = proxy.keepalive_timeout,
             keepalive_requests = proxy.keepalive_requests
         }
@@ -82,14 +84,13 @@ function WAFCDN_PROXY.rewrite()
     ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
     ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
     ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
-    -- 自定义回源请求头 
-    for key, val in pairs(proxy.header) do
+    -- 自定义回源请求头
+    for key, val in pairs(proxy.header or {}) do
         ngx.req.set_header(key, val)
     end
     if proxy.host then -- 回源Host
         ngx.var.wafcdn_proxy_host = proxy.host
     end
-    return
 end
 
 -- 反向代理连接池
@@ -105,8 +106,8 @@ function WAFCDN_PROXY.balancer()
     -- SNI后端是https的话需要第三个参数host
     -- ok, err = balancer.set_current_peer(host, port, host?)
     local ok, err = balancer.set_current_peer(
-        ngx.ctx.wafcdn_proxy_upstream.ip, 
-        ngx.ctx.wafcdn_proxy_upstream.port, 
+        ngx.ctx.wafcdn_proxy_upstream.ip,
+        ngx.ctx.wafcdn_proxy_upstream.port,
         ngx.ctx.wafcdn_proxy_upstream.host
     )
     if not ok then
@@ -115,9 +116,9 @@ function WAFCDN_PROXY.balancer()
     end
     -- 上游连接池
     -- ok, err = balancer.enable_keepalive(idle_timeout?, max_requests?)
-    if ngx.ctx.wafcdn_proxy_upstream.keepalive_requests > 0 then
+    if ngx.ctx.wafcdn_proxy_upstream.keepalive_requests or 0 > 0 then
         ok, err = balancer.enable_keepalive(
-            ngx.ctx.wafcdn_proxy_upstream.keepalive_timeout, 
+            ngx.ctx.wafcdn_proxy_upstream.keepalive_timeout,
             ngx.ctx.wafcdn_proxy_upstream.keepalive_requests
         )
         if not ok then
@@ -127,5 +128,22 @@ function WAFCDN_PROXY.balancer()
     end
 end
 
+
+function WAFCDN_PROXY.header_filter()
+    ngx.header.content_length = nil
+end
+
+
+-- 反向代理缓存
+-- @param
+    -- ngx.ctx.wafcdn_proxy_cache = { time = 0, key = "", status = {} }
+function WAFCDN_PROXY.body_filter()
+    -- 缓存处理
+    if ngx.ctx.wafcdn_proxy_cache.time > 0 then
+        ngx.log(ngx.ERR, "-", ngx.arg[2])
+    end
+    ngx.arg[1] = "hello"
+    ngx.arg[2] = true
+end
 
 return WAFCDN_PROXY

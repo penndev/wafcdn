@@ -2,13 +2,10 @@ local ngx = require("ngx")
 local response = require("response")
 local util = require("util")
 local filter = require("filter")
-local balancer = require("ngx.balancer")
 
 local WAFCDN = {}
 
 function WAFCDN.rewrite()
-    ngx.log(ngx.ERR, "WAFCDN.rewrite")
-
     local host = ngx.var.host
     if not host then
         response.status(400, "01")
@@ -17,30 +14,20 @@ function WAFCDN.rewrite()
 
     -- 获取后台配置
     local res, err = util.request("/@debug/@wafcdn/domain", {
-        args={
-            host=ngx.var.host
-        },
-        vars={
-            wafcdn_proxy = util.json_encode({
-                server = "http://127.0.0.1:8000",
-                keepalive_timeout = 0,
-                keepalive_requests = 0,
-                header = {},
-                cache = {}
-            })
-        }
+        args={ host=ngx.var.host },
+        vars={ wafcdn_proxy = util.json_encode({ server = "http://127.0.0.1:8000" })}
     })
     if res == nil then
-        response.status(406, "Domain Not Found")
+        response.status(406, "Domain Not Found"..string(err))
         return
     end
-    
-    -- -- -- -- -- -- -- -- -- 
+
+    -- -- -- -- -- -- -- -- --
     -- !IP黑名单处理
     -- !IP区域控制
     -- !User-Agent设备控制列表
-    -- !Referer 引用控制
-    -- -- -- -- -- -- -- -- -- 
+    -- !Referrer引用控制
+    -- -- -- -- -- -- -- -- --
 
     -- rate单链接限速，并发请求限速。
     local limit = res.body.security.limit
@@ -57,11 +44,11 @@ function WAFCDN.rewrite()
     if sign.status == true then
         local allow, err = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
         if not allow then
-            response.status(403, "Forbidden " .. err)
+            response.status(403, "Forbidden " .. string(err))
             return
         end
     end
-    
+
     -- 从其他地方重定向过来的 会在原本请求url中添加 /rewrite
     -- 但是ngx.var.request_uri未改变，
     -- 所以可以对比开头来判断是否是重定向过来的
@@ -72,9 +59,10 @@ function WAFCDN.rewrite()
     end
 
     ngx.var.wafcdn_site = res.body.site
-    -- 
+
+    --
     -- 路由
-    -- 
+    --
     if res.body.type == "static" then
         ngx.var.wafcdn_static = util.json_encode(res.body.static)
         ngx.req.set_uri("/@static" .. ngx.var.uri, true)
@@ -83,7 +71,7 @@ function WAFCDN.rewrite()
         ngx.var.wafcdn_proxy = util.json_encode(res.body.proxy)
         ngx.req.set_uri("/@proxy" .. ngx.var.uri, true)
         return
-    else 
+    else
         response.status(403, "SiteType")
         return
     end

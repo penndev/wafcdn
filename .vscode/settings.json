@@ -3,6 +3,7 @@
         "cjson",
         "Docache",
         "godotenv",
+        "keepalive",
         "resty",
         "wafcdn"
     ]
