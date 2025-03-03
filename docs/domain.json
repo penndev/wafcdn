@@ -38,6 +38,7 @@
         ]
     },
     "header": {
-        "Custom-Header": "Response"
+        "Custom-Header": "Response",
+        "P3P": "CP=CAO PSA OUR"
     }
 }

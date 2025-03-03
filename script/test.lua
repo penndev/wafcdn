@@ -1,2 +1,2 @@
 
-ngx.say(not nil, nil == false)
+ngx.say(string.len("/@static") + 1)

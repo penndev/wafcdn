@@ -1,7 +1,7 @@
 local ngx = require("ngx")
-local util = require("util")
+local util = require("module.util")
 local balancer = require("ngx.balancer")
-local response = require("response")
+local wafcdn = require("wafcdn")
 
 local WAFCDN_PROXY = {}
 
@@ -14,16 +14,16 @@ local WAFCDN_PROXY = {}
     -- ngx.var.wafcdn_proxy_server 动态回源协议
     -- ngx.var.wafcdn_proxy_host 回源host
 function WAFCDN_PROXY.rewrite()
-    if ngx.var.wafcdn_proxy == "" then 
+    if ngx.var.wafcdn_proxy == "" then
         ngx.exec("/rewrite"..ngx.var.uri)
         return
     end
-    local proxy_start = 8 --string.len("/@proxy") + 1
-    ngx.req.set_uri(string.sub(ngx.var.uri, proxy_start), false)
+    -- local proxy_start = string.len("/@proxy") + 1
+    ngx.req.set_uri(string.sub(ngx.var.uri, 8), false)
     local proxy = util.json_decode(ngx.var.wafcdn_proxy)
 
     -- 请求缓存处理
-    ngx.ctx.wafcdn_proxy_cache = { time = 0, key = "", status = {} }
+    local wafcdn_proxy_cache = { time = 0, key = "", status = {} }
     if proxy.cache then
         for _, cache in ipairs(proxy.cache) do
             -- 是否匹配缓存方法 GET,POST
@@ -35,24 +35,31 @@ function WAFCDN_PROXY.rewrite()
                 end
                 -- 缓存规则是否命中
                 if cache.ruth and string.match(ngx.var.uri, cache.ruth) then
-                    ngx.ctx.wafcdn_proxy_cache.time = cache.time
-                    ngx.ctx.wafcdn_proxy_cache.key = uri
-                    ngx.ctx.wafcdn_proxy_cache.status = cache.status
+                    wafcdn_proxy_cache.time = cache.time
+                    wafcdn_proxy_cache.key = uri
+                    wafcdn_proxy_cache.status = cache.status
                     break
                 end
             end
         end
     end
     -- 查询是否存在缓存文件，重定向到缓存。
-    if ngx.ctx.wafcdn_proxy_cache.time > 0 then
+    if wafcdn_proxy_cache.time > 0 then
         -- 判断是否命中缓存 - 200返回文件路径与header头
-        local res, err = util.request("/@debug/@wafcdn/cache", {
-            args={ site=ngx.var.wafcdn_site, key=ngx.ctx.wafcdn_proxy_cache.key, method=ngx.var.request_method },
+        local res, _ = util.request("/@debug/@wafcdn/cache", {
+            args={ site=ngx.var.wafcdn_site, key=wafcdn_proxy_cache.key, method=ngx.var.request_method },
             vars={ wafcdn_proxy = util.json_encode({ server = "http://127.0.0.1:8000" })}
         })
         if res then -- 直接返回缓存内容
             ngx.say(util.json_encode(res))
             return
+        else
+            -- 30分钟仅缓存一次
+            local value, flags = ngx.shared.cache_key:get(ngx.var.request_method..wafcdn_proxy_cache.key)
+            if value == nil then
+                -- ngx.shared.cache_key:set(ngx.var.request_method..wafcdn_proxy_cache.key, 1, 60*30)
+                ngx.ctx.wafcdn_proxy_cache = wafcdn_proxy_cache
+            end
         end
     end
 
@@ -68,7 +75,7 @@ function WAFCDN_PROXY.rewrite()
         elseif protocol == "https" then -- 回源协议是否是https
             ngx.var.wafcdn_proxy_server = "https://wafcdn_proxy_backend"
         else
-            response.status(426, "proxy error")
+            wafcdn.status(426, "proxy error")
             return
         end
         -- 设置反向代理连接池
@@ -130,20 +137,58 @@ end
 
 
 function WAFCDN_PROXY.header_filter()
-    ngx.header.content_length = nil
+    if ngx.ctx.wafcdn_proxy_cache and ngx.ctx.wafcdn_proxy_cache.status and util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
+        ngx.header["Cache-Control"] = "max-age=" .. ngx.ctx.wafcdn_proxy_cache.time
+        -- 缓存的key做md5
+        local cache_key = ngx.md5(ngx.var.request_method .. ngx.ctx.wafcdn_proxy_cache.key)
+        local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
+        local cache_path = string.format("%s/%s/%s/%s/%s", "./data", ngx.var.wafcdn_site, dir1, dir2, cache_key)
+        -- 创建缓存文件
+        local file, err = io.open(cache_path, "wb")
+        if not file then
+            if util.mkdir(string.match(cache_path, "(.*)/")) then
+                file, err = io.open(cache_path, "wb")
+            end
+            if not file then
+                ngx.log(ngx.ERR, "cant open file:[", cache_path, "]", err)
+            end
+        end
+        -- 操作缓存
+        if file then
+            ngx.ctx.docache = {
+                file = file, path = cache_path, perfect = false
+            }
+        end
+
+    end
+    wafcdn.header_filter()
 end
 
 
 -- 反向代理缓存
 -- @param
-    -- ngx.ctx.wafcdn_proxy_cache = { time = 0, key = "", status = {} }
+    -- ngx.ctx.docache = { file = file, path = cache_path }
 function WAFCDN_PROXY.body_filter()
-    -- 缓存处理
-    if ngx.ctx.wafcdn_proxy_cache.time > 0 then
-        ngx.log(ngx.ERR, "-", ngx.arg[2])
+    if ngx.ctx.docache and ngx.ctx.docache.file then
+        ngx.ctx.docache.file:write(ngx.arg[1])
+        if ngx.arg[2] == true then
+            ngx.ctx.docache.perfect = true
+        end
     end
-    ngx.arg[1] = "hello"
-    ngx.arg[2] = true
 end
+
+-- 日志处理
+function WAFCDN_PROXY.log()
+    if ngx.ctx.docache and ngx.ctx.docache.file then
+        ngx.ctx.docache.file:close()
+        if  ngx.ctx.docache.perfect then
+            -- 发送请求同步缓存状态
+        else
+            os.remove(ngx.ctx.docache.path)
+        end
+    end
+    -- 
+end
+
 
 return WAFCDN_PROXY

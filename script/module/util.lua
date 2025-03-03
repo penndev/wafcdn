@@ -1,7 +1,7 @@
 local ngx = require("ngx")
 local cjson = require("cjson")
+local lfs = require("module.lfs")
 local openssl_hmac = require("resty.openssl.hmac")
-
 
 cjson.encode_escape_forward_slash(false)
 
@@ -12,12 +12,11 @@ local util = {
     json_encode = cjson.encode,
     -- json解码器
     -- @param string
-    -- @return 
-        -- nil 
+    -- @return
+        -- nil
         -- any
     json_decode = cjson.decode,
 }
-
 
 
 -- 发起网络请求
@@ -56,6 +55,7 @@ function util.hmac(method, key, message)
     return hmac_method:final()
 end
 
+-- 判断数组是否包含某个值`
 function util.contains(value, array)
     for _, v in ipairs(array) do
         if v == value then
@@ -64,5 +64,31 @@ function util.contains(value, array)
     end
     return false
 end
+
+-- 递归创建缓存目录
+---@param path string 要创建的文件路径
+---@return boolean?
+function util.mkdir(path)
+    local res, err = lfs.mkdir(path)
+    if not res then
+        if lfs.attributes(path, 'mode') == 'directory' then
+            return true
+        end
+        local parent, count = string.gsub(path, "/[^/]+$", "")
+        if count ~= 1 then
+            ngx.log(ngx.ERR, "mkdir err:[", path, "]", err)
+            return false
+        end
+        if util.mkdir(parent) then
+            local lres, lerr = lfs.mkdir(path)
+            if not lres then
+                ngx.log(ngx.ERR, "mkdir err:[", path, "]", lerr)
+            end
+            return lres
+        end
+    end
+    return res
+end
+
 
 return util
