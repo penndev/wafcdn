@@ -1,6 +1,6 @@
 local ngx = require("ngx")
 local util = require("module.util")
-local filter = require("filter")
+local filter = require("module.filter")
 
 local WAFCDN = {}
 

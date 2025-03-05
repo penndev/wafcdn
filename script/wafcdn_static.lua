@@ -6,7 +6,7 @@ local WAFCDN_STATIC = {}
 -- 静态文件目录访问
 function WAFCDN_STATIC.rewrite()
     -- 用户直接输入访问 /@static
-    if ngx.var.wafcdn_static == "" then 
+    if ngx.var.wafcdn_static == "" then
         ngx.exec("/rewrite"..ngx.var.uri)
         return
     end
