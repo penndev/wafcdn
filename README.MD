@@ -29,20 +29,41 @@
 - 运行监控服务器的运行情况等功能。
 
 
-## openresty 生命周期图
-
-![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
-
-## 环境安装
-
-自助安装脚本 https://gist.github.com/penndev/9f01b3864abe2368424d3a79f5efff7e
 
 
 ## 快速开发调试重启
 
 openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
 
-## openssl 依赖
-https://github.com/fffonion/lua-resty-openssl
 
-标准UTC0时区的秒时间戳 `Math.ceil(Date.now()/1000) + (new Date().getTimezoneOffset() * 60)`
+
+# 签名与加密
+
+JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().getTimezoneOffset() * 60)`
+
+
+
+# openssl 说明
+
+![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
+
+
+```
+# 启动
+openresty -p ./ 
+
+```
+
+
+Q 为什么要用三方库，而不是默认的`ngx.md5`这些
+A 支持更全面，默认的几个加密方法太少。
+
+```
+opm get fffonion/lua-resty-openssl
+```
+
+Q 为什么使用http库而不是 `ngx.location.capture`
+A location在一些周期不可用。
+```
+opm get ledgetech/lua-resty-http
+```

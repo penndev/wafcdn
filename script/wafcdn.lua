@@ -18,9 +18,8 @@ function WAFCDN.rewrite()
     end
 
     -- 获取后台配置
-    local res, err = util.request("/@debug/@wafcdn/domain", {
+    local res, err = util.request("/@wafcdn/domain", {
         args={ host=ngx.var.host },
-        vars={ wafcdn_proxy = util.json_encode({ server = "http://127.0.0.1:8000" })}
     })
     if res == nil then
         WAFCDN.status(406, "Domain Not Found".. err)

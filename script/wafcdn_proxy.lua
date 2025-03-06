@@ -46,9 +46,8 @@ function WAFCDN_PROXY.rewrite()
     -- 查询是否存在缓存文件，重定向到缓存。
     if wafcdn_proxy_cache.time > 0 then
         -- 判断是否命中缓存 - 200返回文件路径与header头
-        local res, _ = util.request("/@debug/@wafcdn/cache", {
+        local res, _ = util.request("/@wafcdn/cache", {
             args={ site=ngx.var.wafcdn_site, key=wafcdn_proxy_cache.key, method=ngx.var.request_method },
-            vars={ wafcdn_proxy = util.json_encode({ server = "http://127.0.0.1:8000" })}
         })
         if res then -- 直接返回缓存内容
             ngx.say(util.json_encode(res))
@@ -138,7 +137,6 @@ end
 
 function WAFCDN_PROXY.header_filter()
     if ngx.ctx.wafcdn_proxy_cache and ngx.ctx.wafcdn_proxy_cache.status and util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
-        ngx.header["Cache-Control"] = "max-age=" .. ngx.ctx.wafcdn_proxy_cache.time
         -- 缓存的key做md5
         local cache_key = ngx.md5(ngx.var.request_method .. ngx.ctx.wafcdn_proxy_cache.key)
         local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
@@ -156,10 +154,13 @@ function WAFCDN_PROXY.header_filter()
         -- 操作缓存
         if file then
             ngx.ctx.docache = {
-                file = file, path = cache_path, perfect = false
+                file = file,
+                path = cache_path,
+                perfect = false,
+                header = ngx.header
             }
         end
-
+        ngx.header["Cache-Control"] = "max-age=" .. ngx.ctx.wafcdn_proxy_cache.time
     end
     wafcdn.header_filter()
 end
@@ -183,11 +184,21 @@ function WAFCDN_PROXY.log()
         ngx.ctx.docache.file:close()
         if  ngx.ctx.docache.perfect then
             -- 发送请求同步缓存状态
+            local reqdata = util.json_encode({
+                site_id=ngx.var.wafcdn_site, path=ngx.ctx.docache.path,
+                method=ngx.var.request_method, header=ngx.ctx.docache.header})
+            util.request("/@wafcdn/cache", {
+                method="POST",
+                header={
+                    ["Content-Type"]="application/json", ["Content-Length"] = #reqdata
+                },
+                body = reqdata
+            })
         else
             os.remove(ngx.ctx.docache.path)
         end
     end
-    -- 
+    --
 end
 
 

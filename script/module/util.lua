@@ -1,6 +1,7 @@
 local ngx = require("ngx")
 local cjson = require("cjson")
 local lfs = require("module.lfs")
+local http = require("resty.http")
 local openssl_hmac = require("resty.openssl.hmac")
 
 cjson.encode_escape_forward_slash(false)
@@ -19,15 +20,21 @@ local util = {
 }
 
 
--- 发起网络请求
--- https://github.com/openresty/lua-nginx-module?tab=readme-ov-file#ngxlocationcapture
+-- 发起与主控网络请求
+-- https://github.com/ledgetech/lua-resty-http?tab=readme-ov-file#request_uri
 -- @param uri 请求网址
 -- @param table 请求描述
 -- @return table 返回体
 function util.request(uri, opt)
-    local res = ngx.location.capture(uri, opt)
-    if res.truncated ~= false then
-        return nil, 'res.truncated true'
+    local httpc, err = http.new()
+    if not httpc then
+        return nil, "Failed to create http client: " .. (err or "unknown error")
+    end
+    httpc:set_timeout(5000) -- 5秒超时
+    -- 发送 HTTP 请求
+    local res, err = httpc:request_uri("http://127.0.0.1:8000"..uri, opt)
+    if not res then
+        return nil, "HTTP request failed: " .. (err or "unknown error")
     end
     if res.status ~= 200 then
         return nil, 'res.status ' .. res.status
@@ -36,7 +43,8 @@ function util.request(uri, opt)
     if body == nil then
         return nil, 'json_decode decode fail'
     end
-    return {header = res.header, body = body}, nil
+    res.body = body
+    return res
 end
 
 -- base64 url编码
