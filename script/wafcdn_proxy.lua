@@ -134,7 +134,6 @@ function WAFCDN_PROXY.balancer()
     end
 end
 
-
 function WAFCDN_PROXY.header_filter()
     if ngx.ctx.wafcdn_proxy_cache and ngx.ctx.wafcdn_proxy_cache.status and util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
         -- 缓存的key做md5
@@ -151,20 +150,20 @@ function WAFCDN_PROXY.header_filter()
                 ngx.log(ngx.ERR, "cant open file:[", cache_path, "]", err)
             end
         end
+
         -- 操作缓存
         if file then
             ngx.ctx.docache = {
                 file = file,
                 path = cache_path,
                 perfect = false,
-                header = ngx.header
+                header = ngx.resp.get_headers()
             }
         end
         ngx.header["Cache-Control"] = "max-age=" .. ngx.ctx.wafcdn_proxy_cache.time
     end
     wafcdn.header_filter()
 end
-
 
 -- 反向代理缓存
 -- @param
@@ -184,22 +183,27 @@ function WAFCDN_PROXY.log()
         ngx.ctx.docache.file:close()
         if  ngx.ctx.docache.perfect then
             -- 发送请求同步缓存状态
-            local reqdata = util.json_encode({
-                site_id=ngx.var.wafcdn_site, path=ngx.ctx.docache.path,
-                method=ngx.var.request_method, header=ngx.ctx.docache.header})
-            util.request("/@wafcdn/cache", {
-                method="POST",
-                header={
-                    ["Content-Type"]="application/json", ["Content-Length"] = #reqdata
-                },
-                body = reqdata
+            local data = util.json_encode({
+                site_id=ngx.var.wafcdn_site,
+                path=ngx.ctx.docache.path,
+                method=ngx.var.request_method,
+                header=ngx.ctx.docache.header
             })
+            local handle = function ()
+                util.request("/@wafcdn/cache", {
+                    method = "PUT",
+                    header = {
+                        ["Content-Type"] = "application/json",
+                    },
+                    body = data
+                })
+            end
+            ngx.timer.at(0, handle)
         else
             os.remove(ngx.ctx.docache.path)
         end
     end
     --
 end
-
 
 return WAFCDN_PROXY
