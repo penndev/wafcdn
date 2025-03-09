@@ -36,7 +36,7 @@ function WAFCDN_PROXY.rewrite()
                 -- 缓存规则是否命中
                 if cache.ruth and string.match(ngx.var.uri, cache.ruth) then
                     wafcdn_proxy_cache.time = cache.time
-                    wafcdn_proxy_cache.key = uri
+                    wafcdn_proxy_cache.uri = uri
                     wafcdn_proxy_cache.status = cache.status
                     break
                 end
@@ -47,16 +47,16 @@ function WAFCDN_PROXY.rewrite()
     if wafcdn_proxy_cache.time > 0 then
         -- 判断是否命中缓存 - 200返回文件路径与header头
         local res, _ = util.request("/@wafcdn/cache", {
-            args={ site=ngx.var.wafcdn_site, key=wafcdn_proxy_cache.key, method=ngx.var.request_method },
+            args={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri=wafcdn_proxy_cache.uri, },
         })
         if res then -- 直接返回缓存内容
             ngx.say(util.json_encode(res))
             return
         else
             -- 30分钟仅缓存一次
-            local value, flags = ngx.shared.cache_key:get(ngx.var.request_method..wafcdn_proxy_cache.key)
+            local value, flags = ngx.shared.cache_key:get(ngx.var.request_method..wafcdn_proxy_cache.uri)
             if value == nil then
-                -- ngx.shared.cache_key:set(ngx.var.request_method..wafcdn_proxy_cache.key, 1, 60*30)
+                -- ngx.shared.cache_key:set(ngx.var.request_method..wafcdn_proxy_cache.uri, 1, 60*30)
                 ngx.ctx.wafcdn_proxy_cache = wafcdn_proxy_cache
             end
         end
@@ -154,10 +154,10 @@ function WAFCDN_PROXY.header_filter()
         -- 操作缓存
         if file then
             ngx.ctx.docache = {
-                file = file,
-                path = cache_path,
-                perfect = false,
-                header = ngx.resp.get_headers()
+                header = ngx.resp.get_headers(), -- 响应头
+                file = file, -- 文件句柄
+                path = cache_path, -- 文件路径
+                perfect = false, -- 是否完整
             }
         end
         ngx.header["Cache-Control"] = "max-age=" .. ngx.ctx.wafcdn_proxy_cache.time
@@ -185,18 +185,22 @@ function WAFCDN_PROXY.log()
             -- 发送请求同步缓存状态
             local data = util.json_encode({
                 site_id=ngx.var.wafcdn_site,
-                path=ngx.ctx.docache.path,
                 method=ngx.var.request_method,
-                header=ngx.ctx.docache.header
+                uri=ngx.ctx.wafcdn_proxy_cache.uri,
+                header=ngx.ctx.docache.header,
+                path=ngx.ctx.docache.path,
             })
             local handle = function ()
-                util.request("/@wafcdn/cache", {
+                local res, err = util.request("/@wafcdn/cache", {
                     method = "PUT",
                     header = {
                         ["Content-Type"] = "application/json",
                     },
                     body = data
                 })
+                if not res then
+                    ngx.log(ngx.ERR, "cache error: ", err)
+                end
             end
             ngx.timer.at(0, handle)
         else
