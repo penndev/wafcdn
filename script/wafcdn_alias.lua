@@ -22,13 +22,7 @@ end
 
 
 function WAFCDN_ALIAS.header_filter()
-    if ngx.var.wafcdn_header == "" then
-        return
-    end
-    local header, _ = util.json_decode(ngx.var.wafcdn_header)
-    for key, val in pairs(header or {}) do
-        ngx.header[key] = val
-    end
+    util.header_response()
 end
 
 return WAFCDN_ALIAS

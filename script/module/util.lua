@@ -6,18 +6,35 @@ local openssl_hmac = require("resty.openssl.hmac")
 
 cjson.encode_escape_forward_slash(false)
 
-local util = {
-    -- json编码器
-    -- @param any
-    -- @return string
-    json_encode = cjson.encode,
-    -- json解码器
-    -- @param string
-    -- @return
-        -- nil
-        -- any
-    json_decode = cjson.decode,
-}
+local util = {}
+
+-- json编码器
+-- @param any
+-- @return result, error
+    -- string
+    -- nil, string
+function util.json_encode(data)
+    local ok, result = pcall(cjson.encode, data)
+    if ok then
+        return result
+    else
+        return nil, "JSON encode error: " .. tostring(result)
+    end
+end
+
+-- json解码器
+-- @param string
+-- @return result, error
+    -- table
+    -- nil, string
+function util.json_decode(data)
+    local ok, result = pcall(cjson.decode, data)
+    if ok then
+        return result
+    else
+        return nil, "JSON decode error: " .. tostring(result)
+    end
+end
 
 
 -- 发起与主控网络请求
@@ -26,22 +43,35 @@ local util = {
 -- @param table 请求描述
 -- @return table 返回体
 function util.request(uri, opt)
-    local httpc, err = http.new()
-    if not httpc then
-        return nil, "Failed to create http client: " .. (err or "unknown error")
+
+    local timeout = 3000
+    local api = "http://172.21.16.1:8000"
+
+    local url = api .. uri
+    local msg = "WAFCDN_INTERNAL_HTTP_FAIL"
+
+    local client, err = http.new()
+    if not client then
+        ngx.log(ngx.ERR, "Failed to create http client: ", err)
+        return nil, msg
     end
-    httpc:set_timeout(5000) -- 5秒超时
-    -- 发送 HTTP 请求
-    local res, err = httpc:request_uri("http://127.0.0.1:8000"..uri, opt)
+    client:set_timeout(timeout) -- 3秒超时
+
+    local res, err = client:request_uri(url, opt)
     if not res then
-        return nil, "HTTP request failed: " .. (err or "unknown error")
+        ngx.log(ngx.ERR, "HTTP request failed: ", err)
+        return nil, msg
     end
+
     if res.status ~= 200 then
-        return nil, 'res.status ' .. res.status
+        return nil, 'INTERNAL_HTTP_STATUS_' .. res.status
     end
-    local body = util.json_decode(res.body)
-    if body == nil then
-        return nil, 'json_decode decode fail'
+    if not res.body then
+        return nil, 'INTERNAL_HTTP_BODY_FAIL'
+    end
+    local body, err = util.json_decode(res.body)
+    if not body then
+        return nil, 'INTERNAL_HTTP_BODY_JSON_FAIL'
     end
     res.body = body
     return res
@@ -98,5 +128,42 @@ function util.mkdir(path)
     return res
 end
 
+-- 返回http的状态码
+-- @param status 状态码
+-- @param message 信息
+-- @return void
+function util.status(status, message)
+    ngx.status = status
+    ngx.say(status .. "->" .. message)
+    ngx.exit(status)
+end
+
+-- 添加header头
+-- @param table new_header
+-- @return json string
+function util.header_merge(new_header)
+    if ngx.var.wafcdn_header == "" then
+        return util.json_encode(new_header)
+    end
+    local header, _ = util.json_decode(ngx.var.wafcdn_header)
+    if header == nil then
+        return util.json_encode(new_header)
+    end
+    for key, val in pairs(header) do
+        new_header[key] = header[val]
+    end
+    return util.json_encode(new_header)
+end
+
+
+function util.header_response()
+    ngx.header["Server"] = "WAFCDN"
+    if ngx.var.wafcdn_header ~= "" then
+        local header, _ = util.json_decode(ngx.var.wafcdn_header)
+        for key, val in pairs(header or {}) do
+            ngx.header[key] = val
+        end
+    end
+end
 
 return util
