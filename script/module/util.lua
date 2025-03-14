@@ -1,4 +1,5 @@
 local ngx = require("ngx")
+local lock = require("resty.lock")
 local cjson = require("cjson")
 local lfs = require("module.lfs")
 local http = require("resty.http")
@@ -43,38 +44,91 @@ end
 -- @param table 请求描述
 -- @return table 返回体
 function util.request(uri, opt)
+    local function request(uri, opt)
+        local timeout = 3000
+        local api = "http://172.21.16.1:8000"
 
-    local timeout = 3000
-    local api = "http://172.21.16.1:8000"
+        local url = api .. uri
+        local msg = "WAFCDN_INTERNAL_HTTP_FAIL"
+        local client, err = http.new()
+        if not client then
+            ngx.log(ngx.ERR, "Failed to create http client: ", err)
+            return nil, msg
+        end
+        client:set_timeout(timeout) -- 3秒超时
+        local res, err = client:request_uri(url, opt)
+        if not res then
+            ngx.log(ngx.ERR, "HTTP request failed: ", err)
+            return nil, msg
+        end
+        if res.status ~= 200 then
+            return nil, 'INTERNAL_HTTP_STATUS_' .. res.status
+        end
+        if not res.body then
+            return nil, 'INTERNAL_HTTP_BODY_FAIL'
+        end
+        local body, err = util.json_decode(res.body)
+        if not body then
+            return nil, 'INTERNAL_HTTP_BODY_JSON_FAIL'
+        end
+        return {
+            headers = res.headers,
+            status = res.status,
+            body = body,
+        }
+    end
+    -- 缓存http结果
+    if opt and opt.cache and opt.cache > 0 then
+        local cache_key = ngx.md5(uri..util.json_encode(opt))
+        -- 读取缓存
+        local value, _ = ngx.shared.request:get(cache_key)
+        if value then
+            return util.json_decode(value)
+        end
 
-    local url = api .. uri
-    local msg = "WAFCDN_INTERNAL_HTTP_FAIL"
+        -- 加缓存所锁
+        local request_lock, err = lock:new("request_lock")
+        if not request_lock then
+            ngx.log(ngx.ERR, "cant create request_lock:", err)
+            return nil, "INTERNAL_LOCK_NEW_FAIL"
+        end
+        local locked, err = request_lock:lock(cache_key)
+        if not locked then
+            ngx.log(ngx.ERR, "cant lock request:", err)
+            return nil, "INTERNAL_LOCK_FAIL"
+        end
 
-    local client, err = http.new()
-    if not client then
-        ngx.log(ngx.ERR, "Failed to create http client: ", err)
-        return nil, msg
-    end
-    client:set_timeout(timeout) -- 3秒超时
+        local unlock = function()
+            local ok, err = request_lock:unlock()
+            if not ok then
+                ngx.log(ngx.ERR, "cant unlock request_lock:", err)
+            end
+        end
 
-    local res, err = client:request_uri(url, opt)
-    if not res then
-        ngx.log(ngx.ERR, "HTTP request failed: ", err)
-        return nil, msg
+        -- 锁的持有者已经填充缓存
+        local value, _ = ngx.shared.request:get(cache_key)
+        if value then
+            unlock()
+            return util.json_decode(value)
+        end
+        local res, err = request(uri, opt)
+        unlock()
+        if res then
+            local data,err = util.json_encode(res)
+            if not data then
+                ngx.log(ngx.ERR, "json encode err:", err)
+            end
+            local success, err, forcible = ngx.shared.request:set(cache_key, data, opt.cache)
+            if err or not success then
+                ngx.log(ngx.ERR, "ngx.shared.request set err:", err)
+            end
+            if forcible then
+                ngx.log(ngx.ERR, "ngx.shared.request no memory")
+            end
+        end
+        return res, err
     end
-
-    if res.status ~= 200 then
-        return nil, 'INTERNAL_HTTP_STATUS_' .. res.status
-    end
-    if not res.body then
-        return nil, 'INTERNAL_HTTP_BODY_FAIL'
-    end
-    local body, err = util.json_decode(res.body)
-    if not body then
-        return nil, 'INTERNAL_HTTP_BODY_JSON_FAIL'
-    end
-    res.body = body
-    return res
+    return request(uri, opt)
 end
 
 -- base64 url编码

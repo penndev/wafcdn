@@ -15,7 +15,7 @@ function WAFCDN.rewrite()
     end
 
     -- 获取域名后台配置
-    local res, err = util.request("/@wafcdn/domain", {args={ host=ngx.var.host }})
+    local res, err = util.request("/@wafcdn/domain", {args={ host=ngx.var.host }, cache=3})
     if res == nil then
         util.status(404, err)
         return
