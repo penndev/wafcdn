@@ -43,6 +43,19 @@ JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().get
 
 
 
+## 缓存管理 
+- 如果缓存命中信息
+    `cache-control` 缓存规则时间
+    `X-Cache` 是否命中缓存文件
+    `Age` 缓存存活时间
+
+- 缓存动作
+    一次缓存动作 通过 `ngx.shared.cache_key` 来做锁，防止多线程污染缓存。
+
+- 缓存结果
+    - 文件请求中断，缓存的文件会被清理
+    - Range 请求会被被忽略缓存动作（因为range通常为大文件，直接回源的话!缓存穿透攻击!）
+
 # openssl 说明
 
 ![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)

@@ -34,7 +34,7 @@ function WAFCDN_PROXY.ROUTE(proxy)
         end
     end
     -- ngx.log(ngx.ERR, "wafcdn_proxy_cache: ", util.json_encode(wafcdn_proxy_cache))
-    if wafcdn_proxy_cache.time > 0 then -- 判断是否命中缓存 - 200返回文件路径与header头
+    if wafcdn_proxy_cache.time > 0 and not ngx.var.http_range then -- 判断是否命中缓存 - 200返回文件路径与header头
         local res, _ = util.request("/@wafcdn/cache", {
             args={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri=wafcdn_proxy_cache.uri},
         })
@@ -58,11 +58,12 @@ function WAFCDN_PROXY.ROUTE(proxy)
             ["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time,
             ["X-Cache"] = "MISS"
         })
-        -- 30分钟仅缓存一次
-        -- local value, flags = ngx.shared.cache_key:get(ngx.var.request_method..wafcdn_proxy_cache.uri)
-        -- if value == nil then
-        --     ngx.shared.cache_key:set(ngx.var.request_method..wafcdn_proxy_cache.uri, 1, 60*30)
-        -- end
+        -- 多少分钟仅缓存一次
+        local cache_key = ngx.md5(ngx.var.wafcdn_site..ngx.var.request_method..wafcdn_proxy_cache.uri)
+        local value, flags = ngx.shared.cache_key:get(cache_key)
+        if value == nil then
+            ngx.shared.cache_key:set(cache_key, 1, 10*60)
+        end
     end
     proxy.cache = wafcdn_proxy_cache
     ngx.var.wafcdn_proxy = util.json_encode(proxy)

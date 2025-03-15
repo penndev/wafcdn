@@ -46,13 +46,13 @@ end
 -- @return err nil 错误描述 timebefore timeafter
 function filter.sign(method, key, expireargs, signargs)
     -- 默认args已经排序
-    local args, err = ngx.req.get_uri_args()
-    if not args then --if err == "truncated" then
+    local args, _ = ngx.req.get_uri_args()
+    if not args then
         return false, 'no_args'
     end
 
     -- 设置请求过期。
-    if not args[expireargs] then 
+    if not args[expireargs] then
         return false, 'no_args_expire'
     end
     local expire_time = tonumber(args[expireargs])
@@ -62,7 +62,7 @@ function filter.sign(method, key, expireargs, signargs)
     end
 
     -- 设置签名校验
-    if not args[signargs] then 
+    if not args[signargs] then
         return false, 'no_args_sign'
     end
     local slicestr = expireargs.."="..args[expireargs].."&"..signargs.."="..args[signargs]
