@@ -15,7 +15,7 @@ function WAFCDN.rewrite()
     end
 
     -- 获取域名后台配置
-    local res, err = util.request("/@wafcdn/domain", {args={ host=ngx.var.host }, cache=3})
+    local res, err = util.request("/@wafcdn/domain", {query={ host=host }, cache=3})
     if res == nil then
         util.status(404, err)
         return
@@ -43,7 +43,7 @@ function WAFCDN.rewrite()
     if sign.status == true then
         local allow, err = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
         if not allow then
-            util.status(403, "Forbidden " .. string(err))
+            util.status(403, "Forbidden " .. err)
             return
         end
     end
@@ -70,11 +70,9 @@ end
 -- @param table data
 -- @return void
 function WAFCDN.ROUTE(body)
-
     -- # 设置全局变量
     ngx.var.wafcdn_site = body.site -- 站点ID
     ngx.var.wafcdn_header = util.json_encode(body.header) -- 用户返回头
-
     if body.type == "proxy" then
         proxy.ROUTE(body.proxy)
         return

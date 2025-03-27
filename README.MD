@@ -2,23 +2,31 @@
 
 > 基于openresty开发的服务器网关，融合waf和cdn的功能。
 
-## WAF功能 ×
-
-
+## WAF功能
 - 单连接限速
 - QPS限制
-- CC防御
-- IP黑白名单
-- IP地域限制
-- 客户端token校验(网页验证码)
+- CC签名防御
+- ×IP黑白名单
+- ×IP地域限制
+- ×客户端token校验(网页验证码)
 
-## CDN加速分发
+## 反向代理
 
-- 使用nginx原生ngx_http_proxy_module模块来进行回源处理，稳定。
+- 连接池配置
+    - 保持活跃的连接数量
+    - 单连接存活时间/秒
 
-- 使用nginx原生ngx_http_core_module的静态文件模块来快速处理缓存响应。
+- 使用nginx `ngx_http_proxy_module` 模块回源
+    - 直接使用域名回源
+    - 可自定义回源`Host`
 
-- 使用nginx lua module来完成缓存高效的动态匹配与响应。
+- 缓存 `X-Cache`
+    - `MISS` 命中缓存规则，会输出 `Cache-Control` 来显示缓存配置时间
+    - `HIT` 命中缓存，会输出 `Cache-Control` `Age` 显示缓存详情
+    - `ERROR` 缓存中断 http返回的状态码与预期不符
+
+- 使用nginx `ngx_http_core_module` 模块来响应缓存
+    - 支持http-range请求
 
 ## WAFCDN后台管理
 

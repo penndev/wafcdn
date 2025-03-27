@@ -1,4 +1,5 @@
 local ngx = require("ngx")
+local init = require("init")
 local lock = require("resty.lock")
 local cjson = require("cjson")
 local lfs = require("module.lfs")
@@ -45,17 +46,14 @@ end
 -- @return table 返回体
 function util.request(uri, opt)
     local function request(uri, opt)
-        local timeout = 3000
-        local api = "http://172.21.16.1:8000"
-
-        local url = api .. uri
+        local url = init.WAFCDN_API .. uri
         local msg = "WAFCDN_INTERNAL_HTTP_FAIL"
         local client, err = http.new()
         if not client then
             ngx.log(ngx.ERR, "Failed to create http client: ", err)
             return nil, msg
         end
-        client:set_timeout(timeout) -- 3秒超时
+        client:set_timeout(init.WAFCDN_API_TIMEOUT) -- 3秒超时
         local res, err = client:request_uri(url, opt)
         if not res then
             ngx.log(ngx.ERR, "HTTP request failed: ", err)
@@ -203,15 +201,15 @@ function util.header_merge(new_header)
     if header == nil then
         return util.json_encode(new_header)
     end
-    for key, val in pairs(header) do
-        new_header[key] = header[val]
+    for key, val in pairs(new_header) do
+        header[key] = val
     end
-    return util.json_encode(new_header)
+    return util.json_encode(header)
 end
 
 
 function util.header_response()
-    ngx.header["Server"] = "WAFCDN"
+    ngx.header.Server = 'wafcdn'
     if ngx.var.wafcdn_header ~= "" then
         local header, _ = util.json_decode(ngx.var.wafcdn_header)
         for key, val in pairs(header or {}) do

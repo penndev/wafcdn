@@ -6,7 +6,7 @@ local util = require("module.util")
 local filter = {}
 
 -- 限流函数：根据速率、QPS（每秒查询数）和突发值来控制流量
--- @param rate number 允许的平均速率（单位：请求/秒）
+-- @param rate number 允许的流量速率（单位：请求速度 kb/s）
 -- @param qps number 允许的最大 QPS（每秒查询数）
 -- @param burst number 允许的突发请求数（短时间内允许的最大请求数）也就是合计burst/qps秒内允许的最多请求。
 function filter.limit(rate, qps, burst)
