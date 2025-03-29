@@ -10,7 +10,17 @@
 - ×IP地域限制
 - ×客户端token校验(网页验证码)
 
-## 反向代理
+### 签名与加密
+
+JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().getTimezoneOffset() * 60)`
+
+
+
+
+
+## CDN功能
+
+### 反向代理
 
 - 连接池配置
     - 保持活跃的连接数量
@@ -39,19 +49,11 @@
 
 
 
-## 快速开发调试重启
-
-openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
 
 
 
-# 签名与加密
 
-JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().getTimezoneOffset() * 60)`
-
-
-
-## 缓存管理 
+### 缓存管理 
 - 如果缓存命中信息
     `cache-control` 缓存规则时间
     `X-Cache` 是否命中缓存文件
@@ -64,7 +66,10 @@ JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().get
     - 文件请求中断，缓存的文件会被清理
     - Range 请求会被被忽略缓存动作（因为range通常为大文件，直接回源的话!缓存穿透攻击!）
 
-# openssl 说明
+# openresty 说明
+
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout private.key -out certificate.crt -config ssl.conf
+
 
 ![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
 
@@ -73,8 +78,9 @@ JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().get
 # 启动
 openresty -p ./ 
 
+# 快速开发调试重启 
+openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
 ```
-
 
 Q 为什么要用三方库，而不是默认的`ngx.md5`这些
 A 支持更全面，默认的几个加密方法太少。

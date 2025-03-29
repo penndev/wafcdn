@@ -1,10 +1,56 @@
 local ngx = require("ngx")
+local ssl = require("ngx.ssl")
 local util = require("module.util")
 local filter = require("module.filter")
 local proxy = require("wafcdn_proxy")
 
 
 local WAFCDN = {}
+
+function WAFCDN.ssl()
+    local hostname, err = ssl.server_name()
+    if not hostname then
+        ngx.log(ngx.INFO, "failed to get server_name certificates:", err)
+        return ngx.exit(ngx.ERROR)
+    end
+
+    local cleared, err = ssl.clear_certs()
+    if not cleared then
+        ngx.log(ngx.ERR, "failed to clear existing (fallback) certificates:", err)
+        return ngx.exit(ngx.ERROR)
+    end
+
+    local domain, err = util.request("/@wafcdn/ssl", {query={ host=hostname }, cache=10})
+    if not domain then
+        ngx.log(ngx.INFO, "failed to get api domain:", hostname, " ",err)
+        return ngx.exit(ngx.ERROR)
+    end
+    -- 设置公钥
+    local cert, err = ssl.cert_pem_to_der(domain.body.publickey)
+    if not cert then
+        ngx.log(ngx.ERR, "failed to convert certificate chain from PEM to DER: ", err)
+        return ngx.exit(ngx.ERROR)
+    end
+
+    local public, err = ssl.set_der_cert(cert)
+    if not public then
+        ngx.log(ngx.ERR, "failed to set DER cert:", err)
+        return ngx.exit(ngx.ERROR)
+    end
+
+    -- 设置私钥
+    local key, err = ssl.priv_key_pem_to_der(domain.body.privatekey)
+    if not key then
+        ngx.log(ngx.ERR, "failed to convert private key from PEM to DER:", err)
+        return ngx.exit(ngx.ERROR)
+    end
+    local private, err = ssl.set_der_priv_key(key)
+    if not private then
+        ngx.log(ngx.ERR, "failed to set DER private key:", err)
+        return ngx.exit(ngx.ERROR)
+    end
+end
+
 
 function WAFCDN.rewrite()
     -- 获取域名
@@ -18,6 +64,12 @@ function WAFCDN.rewrite()
     local res, err = util.request("/@wafcdn/domain", {query={ host=host }, cache=3})
     if res == nil then
         util.status(404, err)
+        return
+    end
+
+    -- http请求强制https
+    if res.sslforce and not ngx.var.https then
+        ngx.redirect("https://" .. host .. ngx.var.request_uri, 301)
         return
     end
 
