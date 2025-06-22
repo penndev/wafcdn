@@ -75,6 +75,10 @@ openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout private.key -out ce
 
 
 ```
+# docker启动
+docker run --name openresty -p 80:80 -v ./:/app -w /app -d openresty/openresty openresty -p ./ -g "daemon off;"
+
+
 # 启动
 openresty -p ./ 
 
@@ -82,15 +86,16 @@ openresty -p ./
 openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
 ```
 
-Q 为什么要用三方库，而不是默认的`ngx.md5`这些
-A 支持更全面，默认的几个加密方法太少。
 
-```
+**依赖项**
+```bash
+# Q 为什么要用三方库，而不是默认的`ngx.md5`这些
+# A 支持更全面，默认的几个加密方法太少。
+
 opm get fffonion/lua-resty-openssl
-```
-
-Q 为什么使用http库而不是 `ngx.location.capture`
-A location在一些周期不可用。
-```
+ 
+# Q 为什么使用http库而不是 `ngx.location.capture`
+# A location在一些周期不可用。
+ 
 opm get ledgetech/lua-resty-http
 ```

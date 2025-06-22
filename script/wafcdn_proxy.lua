@@ -16,7 +16,7 @@ function WAFCDN_PROXY.ROUTE(proxy)
     local wafcdn_proxy_cache = { time = 0, uri = "", status = {} }
     if proxy.cache then
         for _, cache in ipairs(proxy.cache) do
-            -- 是否匹配缓存方法 GET,POST
+            -- 是否包含了缓存方法 GET,POST
             if util.contains(ngx.var.request_method, cache.method) then
                 -- 是否忽略参数
                 local uri = ngx.var.uri
@@ -34,7 +34,9 @@ function WAFCDN_PROXY.ROUTE(proxy)
         end
     end
 
-    if wafcdn_proxy_cache.time > 0 and not ngx.var.http_range then -- 判断是否命中
+    -- 判断是否命中
+    -- 如果缓存命中就直接跳转到对应的文件。
+    if wafcdn_proxy_cache.time > 0 and not ngx.var.http_range then 
         local res, _ = util.request("/@wafcdn/cache", {
             query={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri=wafcdn_proxy_cache.uri},
         })
@@ -51,10 +53,12 @@ function WAFCDN_PROXY.ROUTE(proxy)
                     res.body.header[key] = nil
                 end
                 ngx.var.wafcdn_header = util.header_merge(res.body.header)
-                -- 返回静态文件
                 ngx.var.wafcdn_alias = util.json_encode({file = res.body.path})
-                ngx.req.set_uri("/@alias", true)
+
+                -- ！！！！！ 这里是直接返回文件了
+                -- 返回静态文件
                 -- ngx.req.set_uri 不会执行任何的后续操作
+                ngx.req.set_uri("/@alias", true)
             end
         end
         ngx.var.wafcdn_header = util.header_merge({
@@ -127,8 +131,6 @@ function WAFCDN_PROXY.rewrite()
     -- 缓存配置
     ngx.ctx.wafcdn_proxy_cache = proxy.cache
 end
-
-
 
 -- 反向代理连接池
 -- @param

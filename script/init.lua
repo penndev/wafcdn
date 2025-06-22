@@ -6,7 +6,7 @@ if wafcdn_data_dir == "" then
     error("env WAFCDN_DATA_DIR not set")
 end
 if lfs.attributes(wafcdn_data_dir, 'mode') ~= 'directory' then
-    error("env WAFCDN_DATA_DIR not directory")
+    error("env WAFCDN_DATA_DIR (" + wafcdn_data_dir + ") not is directory type")
 end
 
 
