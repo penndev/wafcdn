@@ -26,7 +26,7 @@ function WAFCDN.ssl()
         return ngx.exit(ngx.ERROR)
     end
     -- 设置公钥
-    local cert, err = ssl.cert_pem_to_der(domain.body.publickey)
+    local cert, err = ssl.cert_pem_to_der(domain.body.publicKey)
     if not cert then
         ngx.log(ngx.ERR, "failed to convert certificate chain from PEM to DER: ", err)
         return ngx.exit(ngx.ERROR)
@@ -39,7 +39,7 @@ function WAFCDN.ssl()
     end
 
     -- 设置私钥
-    local key, err = ssl.priv_key_pem_to_der(domain.body.privatekey)
+    local key, err = ssl.priv_key_pem_to_der(domain.body.privateKey)
     if not key then
         ngx.log(ngx.ERR, "failed to convert private key from PEM to DER:", err)
         return ngx.exit(ngx.ERROR)
@@ -68,7 +68,7 @@ function WAFCDN.rewrite()
     end
 
     -- http请求强制https
-    if res.sslforce and not ngx.var.https then
+    if res.sslForce and not ngx.var.https then
         ngx.redirect("https://" .. host .. ngx.var.request_uri, 301)
         return
     end
@@ -125,14 +125,20 @@ function WAFCDN.ROUTE(body)
     -- # 设置全局变量
     ngx.var.wafcdn_site = body.site -- 站点ID
     ngx.var.wafcdn_header = util.json_encode(body.header) -- 用户返回头
+    -- 文件请求类型
+    -- @type
+    --  - proxy反向代理方式
+    --  - alisa静态文件访问 -待实现
+    --  - fast_cgi  -待实现
+    --  - tcp_proxy -待实现
     if body.type == "proxy" then
         proxy.ROUTE(body.proxy)
         return
-    elseif body.type == "alisa" then
-        -- 固定缓存的文件根据请求地址来计算静态文件是哪个。
-        -- ngx.var.wafcdn_static = util.json_encode({file = body.file})
-        -- ngx.req.set_uri("/@alisa", true)
-        return
+    -- elseif body.type == "alisa" then
+    --     -- 固定缓存的文件根据请求地址来计算静态文件是哪个。
+    --     -- ngx.var.wafcdn_static = util.json_encode({file = body.file})
+    --     -- ngx.req.set_uri("/@alisa", true)
+    --     return
     else
         util.status(403, "INTERNAL_FAILED_SITE_TYPE")
         return

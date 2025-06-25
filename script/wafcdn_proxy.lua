@@ -33,10 +33,9 @@ function WAFCDN_PROXY.ROUTE(proxy)
             end
         end
     end
-
     -- 判断是否命中
     -- 如果缓存命中就直接跳转到对应的文件。
-    if wafcdn_proxy_cache.time > 0 and not ngx.var.http_range then 
+    if wafcdn_proxy_cache.time > 0 and not ngx.var.http_range then
         local res, _ = util.request("/@wafcdn/cache", {
             query={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri=wafcdn_proxy_cache.uri},
         })
@@ -94,7 +93,7 @@ function WAFCDN_PROXY.rewrite()
 
     -- 反向代理连接方式
     -- pass_proxy or upstream
-    if proxy.keepalive_requests == 0 then -- 走 pass_proxy
+    if proxy.keepaliveRequests == 0 then -- 走 pass_proxy
         ngx.var.wafcdn_proxy_server = proxy.server
     else
         -- 走 upstream
@@ -110,8 +109,8 @@ function WAFCDN_PROXY.rewrite()
         -- 设置反向代理连接池
         ngx.ctx.wafcdn_proxy_upstream = {
             ip = ip, port = port, host = proxy.host,
-            keepalive_timeout = proxy.keepalive_timeout,
-            keepalive_requests = proxy.keepalive_requests
+            keepalive_timeout = proxy.keepaliveTimeout,
+            keepalive_requests = proxy.keepaliveRequests
         }
     end
 
@@ -119,7 +118,7 @@ function WAFCDN_PROXY.rewrite()
     ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
     ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
     ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
-    ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
+    -- ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
     -- 自定义回源请求头
     for key, val in pairs(proxy.header or {}) do
         ngx.req.set_header(key, val)
@@ -168,14 +167,21 @@ function WAFCDN_PROXY.balancer()
 end
 
 function WAFCDN_PROXY.header_filter()
-    -- 是否命中响应状态，
-    if #ngx.ctx.wafcdn_proxy_cache.status == 0 or util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
+    -- 是否需要缓存文件
+    -- 是否命中响应状态
+    if ngx.ctx.wafcdn_proxy_cache.time > 0 and util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
         -- 缓存的key做md5
         local cache_key = ngx.md5(ngx.var.request_method .. ngx.ctx.wafcdn_proxy_cache.uri)
         local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
-        local cache_path = string.format("%s/%s/%s/%s/%s", init.WAFCDN_DATA_DIR, ngx.var.wafcdn_site, dir1, dir2, cache_key)
+        local cache_path = string.format("%s/%s/%s/%s/%s",
+            init.WAFCDN_DATA_DIR,
+            ngx.var.wafcdn_site,
+            dir1,
+            dir2,
+            cache_key
+        )
         -- 创建缓存文件
-        local file, err = io.open(cache_path, "wb")
+        local file, err = io.open(cache_path..".lock", "wb")
         if not file then
             if util.mkdir(string.match(cache_path, "(.*)/")) then
                 file, err = io.open(cache_path, "wb")
@@ -219,10 +225,12 @@ end
 function WAFCDN_PROXY.log()
     if ngx.ctx.docache and ngx.ctx.docache.file then
         ngx.ctx.docache.file:close()
-        if  ngx.ctx.docache.perfect then
+        -- 去除.lock文件名
+        os.rename(ngx.ctx.docache.path..".lock", ngx.ctx.docache.path)
+        if ngx.ctx.docache.perfect then
             -- 发送请求同步缓存状态
             local data = {
-                site_id=ngx.var.wafcdn_site,
+                site_id= tonumber(ngx.var.wafcdn_site),
                 method=ngx.var.request_method,
                 uri=ngx.ctx.wafcdn_proxy_cache.uri,
                 header=ngx.ctx.docache.header,
@@ -232,13 +240,13 @@ function WAFCDN_PROXY.log()
             local handle = function ()
                 local res, err = util.request("/@wafcdn/cache", {
                     method = "PUT",
-                    header = {
+                    headers = {
                         ["Content-Type"] = "application/json",
                     },
                     body = util.json_encode(data)
                 })
-                if not res then
-                    ngx.log(ngx.ERR, "cache error: ", err)
+                if not res or res.status ~= 200 then
+                    ngx.log(ngx.ERR, "cache error: ", err, data.uri, data.method, data.path)
                 end
             end
             ngx.timer.at(0, handle)
