@@ -1,4 +1,13 @@
-local lfs = require("module.lfs")
+local lfs = require("lfs")
+local ngx = require("ngx")
+
+
+-- 设置工作目录
+local prefix = ngx.config.prefix()
+local ok, err = os.execute("cd " .. prefix)
+if not ok then
+    error("failed to set working dir: " .. err)
+end
 
 -- 放置缓存文件的目录
 local wafcdn_data_dir = os.getenv("WAFCDN_DATA_DIR")

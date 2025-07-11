@@ -2,7 +2,7 @@ local ngx = require("ngx")
 local init = require("init")
 local lock = require("resty.lock")
 local cjson = require("cjson")
-local lfs = require("module.lfs")
+local lfs = require("lfs")
 local http = require("resty.http")
 local openssl_hmac = require("resty.openssl.hmac")
 
@@ -217,6 +217,39 @@ function util.header_response()
             ngx.header[key] = val
         end
     end
+end
+
+function util.log()
+    local data = {
+        -- 站点信息
+        site_id = tonumber(ngx.var.wafcdn_site),
+        host = ngx.var.host,
+        -- 客户端信息
+        remote_addr = ngx.var.remote_addr,
+        http_referer = ngx.req.get_headers()["referer"] or "",
+        http_user_agent = ngx.req.get_headers()["user_agent"] or "",
+        -- 请求信息
+        request = ngx.var.request_uri,
+        request_method = ngx.var.request_method,
+        request_time = ngx.var.request_time,
+        -- 传输信息
+        status = tonumber(ngx.var.status),
+        bytes_received = tonumber(ngx.var.request_length),
+        bytes_sent = tonumber(ngx.var.bytes_sent)
+    }
+    local handle = function()
+        local res, err = util.request("/@wafcdn/log", {
+            method = "PUT",
+            headers = {
+                ["Content-Type"] = "application/json"
+            },
+            body = util.json_encode(data)
+        })
+        if not res or res.status ~= 200 then
+            ngx.log(ngx.ERR, "log error: ", err)
+        end
+    end
+    ngx.timer.at(0, handle)
 end
 
 return util

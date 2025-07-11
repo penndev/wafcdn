@@ -1,9 +1,8 @@
 local ngx = require("ngx")
 local ssl = require("ngx.ssl")
-local util = require("module.util")
-local filter = require("module.filter")
+local util = require("util")
+local filter = require("filter")
 local proxy = require("wafcdn_proxy")
-
 
 local WAFCDN = {}
 
@@ -20,9 +19,14 @@ function WAFCDN.ssl()
         return ngx.exit(ngx.ERROR)
     end
 
-    local domain, err = util.request("/@wafcdn/ssl", {query={ host=hostname }, cache=10})
+    local domain, err = util.request("/@wafcdn/ssl", {
+        query = {
+            host = hostname
+        },
+        cache = 10
+    })
     if not domain then
-        ngx.log(ngx.INFO, "failed to get api domain:", hostname, " ",err)
+        ngx.log(ngx.INFO, "failed to get api domain:", hostname, " ", err)
         return ngx.exit(ngx.ERROR)
     end
     -- 设置公钥
@@ -51,7 +55,6 @@ function WAFCDN.ssl()
     end
 end
 
-
 function WAFCDN.rewrite()
     -- 获取域名
     local host = ngx.var.host
@@ -61,7 +64,12 @@ function WAFCDN.rewrite()
     end
 
     -- 获取域名后台配置
-    local res, err = util.request("/@wafcdn/domain", {query={ host=host }, cache=3})
+    local res, err = util.request("/@wafcdn/domain", {
+        query = {
+            host = host
+        },
+        cache = 3
+    })
     if res == nil then
         util.status(404, err)
         return
@@ -134,15 +142,19 @@ function WAFCDN.ROUTE(body)
     if body.type == "proxy" then
         proxy.ROUTE(body.proxy)
         return
-    -- elseif body.type == "alisa" then
-    --     -- 固定缓存的文件根据请求地址来计算静态文件是哪个。
-    --     -- ngx.var.wafcdn_static = util.json_encode({file = body.file})
-    --     -- ngx.req.set_uri("/@alisa", true)
-    --     return
+        -- elseif body.type == "alisa" then
+        --     -- 固定缓存的文件根据请求地址来计算静态文件是哪个。
+        --     -- ngx.var.wafcdn_static = util.json_encode({file = body.file})
+        --     -- ngx.req.set_uri("/@alisa", true)
+        --     return
     else
         util.status(403, "INTERNAL_FAILED_SITE_TYPE")
         return
     end
+end
+
+function WAFCDN.log()
+    util.log()
 end
 
 return WAFCDN

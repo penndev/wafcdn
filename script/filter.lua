@@ -1,7 +1,7 @@
 
 local limit_req = require("resty.limit.req")
 local ngx = require("ngx")
-local util = require("module.util")
+local util = require("util")
 
 local filter = {}
 

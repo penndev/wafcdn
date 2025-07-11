@@ -1,5 +1,5 @@
 local ngx = require("ngx")
-local util = require("module.util")
+local util = require("util")
 local balancer = require("ngx.balancer")
 local init = require("init")
 
@@ -42,6 +42,9 @@ function WAFCDN_PROXY.ROUTE(proxy)
 
         if res then -- 缓存验证
             local cacheAge = ngx.time() - res.body.time
+            -- 验证缓存文件是否存在。没必要
+            -- 因为没有锁的情况下，必然有事件跨度。
+            -- 比如另外的线程删除文件，刚好在本进程在重定向期间就会发生404
             if cacheAge < wafcdn_proxy_cache.time then
                 -- 缓存命中 添加返回头
                 res.body.header["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time
@@ -60,15 +63,24 @@ function WAFCDN_PROXY.ROUTE(proxy)
                 ngx.req.set_uri("/@alias", true)
             end
         end
-        ngx.var.wafcdn_header = util.header_merge({
-            ["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time,
-            ["X-Cache"] = "MISS"
-        })
-        -- 多少分钟仅缓存一次
+
+        -- 多少分钟仅缓存一次 不然会形成竞争。
         local cache_key = ngx.md5(ngx.var.wafcdn_site..ngx.var.request_method..wafcdn_proxy_cache.uri)
         local value, flags = ngx.shared.cache_key:get(cache_key)
         if value == nil then
             ngx.shared.cache_key:set(cache_key, 1, 10*60)
+            -- 强制浏览器按照配置刷新，并设置响应状态。
+            ngx.var.wafcdn_header = util.header_merge({
+                ["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time,
+                ["X-Cache"] = "MISS"
+            })
+        else
+            -- 已经有其他的线程在缓存文件了。 等待结果。就行。直接走反向代理。
+            wafcdn_proxy_cache.time = 0
+            ngx.var.wafcdn_header = util.header_merge({
+                ["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time,
+                ["X-Cache"] = "MISS-LOCK"
+            })
         end
     end
     proxy.cache = wafcdn_proxy_cache
@@ -123,7 +135,7 @@ function WAFCDN_PROXY.rewrite()
     for key, val in pairs(proxy.header or {}) do
         ngx.req.set_header(key, val)
     end
-    if proxy.host then -- 回源Host
+    if proxy.host and proxy.host ~= "" then -- 回源Host
         ngx.var.wafcdn_proxy_host = proxy.host
     end
 
@@ -204,7 +216,7 @@ function WAFCDN_PROXY.header_filter()
         end
     else
         -- 缓存错误
-        ngx.var.wafcdn_header = util.header_merge({["X-Cache"] = "ERROR"})
+        ngx.var.wafcdn_header = util.header_merge({["X-Cache"] = "ERROR",})
     end
     util.header_response()
 end
@@ -225,8 +237,8 @@ end
 function WAFCDN_PROXY.log()
     if ngx.ctx.docache and ngx.ctx.docache.file then
         ngx.ctx.docache.file:close()
-        -- 去除.lock文件名
-        os.rename(ngx.ctx.docache.path..".lock", ngx.ctx.docache.path)
+        -- 去除.lock文件名 让远程接口操作。来控制缓存管理
+        -- os.rename(ngx.ctx.docache.path..".lock", ngx.ctx.docache.path)
         if ngx.ctx.docache.perfect then
             -- 发送请求同步缓存状态
             local data = {
@@ -254,7 +266,8 @@ function WAFCDN_PROXY.log()
             os.remove(ngx.ctx.docache.path)
         end
     end
-    --
+    -- 通用日志处理
+    util.log()
 end
 
 return WAFCDN_PROXY

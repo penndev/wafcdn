@@ -1,5 +1,5 @@
 local ngx = require("ngx")
-local util = require("module.util")
+local util = require("util")
 
 local WAFCDN_ALIAS = {}
 
@@ -23,6 +23,10 @@ end
 
 function WAFCDN_ALIAS.header_filter()
     util.header_response()
+end
+
+function WAFCDN_ALIAS.log()
+    util.log()
 end
 
 return WAFCDN_ALIAS

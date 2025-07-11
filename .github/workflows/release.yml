@@ -2,61 +2,65 @@ name: release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: 
+      - main
 
 jobs:
-  build:
+  dist:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Git
+        uses: actions/checkout@v4
+        with:
+          repository: 'penndev/veadmin'
+      - name: Setup Nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: npm
+      - name: Build
+        run: | 
+          npm install
+          npm run build:wafcdn
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          path: ./dist # 部署编译后的文件
+  bin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Git
+        uses: actions/checkout@v4
+        with:
+          repository: 'penndev/galite'
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21.x'
-      - name: Setup Luajit
-        run: |
-          uname -a
-          sudo apt-get update
-          sudo apt-get -y install --no-install-recommends wget gnupg ca-certificates
-          wget -O - https://openresty.org/package/pubkey.gpg | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list > /dev/null
-          sudo apt-get update
-          sudo apt-get -y install openresty
-      - name: Setup Node 
-        uses: actions/setup-node@v3
+          go-version: latest
+      - name: Build
+        run: go build -o wafcdn ./cmd/wafcdn/main.go
+      - name: Upload
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 16
-      - name: Checkout Code
+          path: ./wafcdn # 部署编译后的文件
+  wafcdn:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
         uses: actions/checkout@v4
-      - name: Build Golnag
+      - name: Luajit Setup
+        uses: leafo/gh-actions-lua@v11
+        with:
+          luaVersion: "luajit-openresty"
+      - name: Build
         run: |
-          go version
-          export CGO_ENABLED=0
-          go build
-      - name: Build Luajit
-        run: |
-          /usr/local/openresty/luajit/bin/luajit -v
-          folder="./script"
-          for file in $folder/*.lua
+          luajit -v
+          for file in ./script/*.lua
           do
-            /usr/local/openresty/luajit/bin/luajit -b $file $file
+            luajit -b $file $file
           done
-      - uses: actions/checkout@v4
+      - name: Upload
+        uses: actions/upload-artifact@v4
         with:
-          repository: 'penndev/veadmin'
-          path: './veadmin'
-      - name: Build dist
-        run: |
-          cd ./veadmin
-          npm install
-          npm run build:wafcdn
-          mv ./dist ../dist
-          cd ../
-      - name: Archive Files
-        run: |
-          tar -czvf wafcdn.tar.gz conf script wafcdn dist .env.sample wafcdn.service
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            wafcdn.tar.gz
+          path: |
+            ./script
