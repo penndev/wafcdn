@@ -103,16 +103,6 @@ opm get logitech/lua-resty-http
 **编译Dockerfile**
 
 ```bash
-
-$env:GOOS = "linux"
-$env:GOARCH = "amd64"
-$env:CGO_ENABLED = "0"
-
-go build -C ../galite/ -o ../wafcdn/build/wafcdn ./cmd/wafcdn/main.go
-npm --prefix ../veadmin run build:wafcdn
-Remove-Item -Recurse -Force ./build/dist
-Move-Item -Path ../veadmin/dist  -Destination ./build/
-
 docker build -t penndev/wafcdn:latest .
 docker run -d -p 20080:80 -p 20443:443 -p 28000:8000  penndev/wafcdn:latest
 ```

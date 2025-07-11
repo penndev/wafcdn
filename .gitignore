@@ -3,5 +3,9 @@ fastcgi_temp
 proxy_temp
 scgi_temp
 uwsgi_temp
+
+logs
 data
-build
+
+certificate.crt
+private.key
