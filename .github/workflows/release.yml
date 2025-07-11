@@ -25,6 +25,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
+          name: dist
           path: ./dist # 部署编译后的文件
   bin:
     runs-on: ubuntu-latest
@@ -42,13 +43,11 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
+          name: bin
           path: ./wafcdn # 部署编译后的文件
   script:
     runs-on: ubuntu-latest
     steps:
-      - name: Git Checkout
-        uses: actions/checkout@v4
-
       - name: Cache APT packages
         uses: actions/cache@v4
         with:
@@ -58,8 +57,7 @@ jobs:
             /var/lib/dpkg
           key: apt-openresty-${{ runner.os }}-${{ hashFiles('**/script/*.lua') }}
           restore-keys: |
-            apt-openresty-${{ runner.os }}-
-
+            apt-openresty-${{ runner.os }}
       - name: Setup Luajit
         run: |
           uname -a
@@ -69,7 +67,8 @@ jobs:
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list > /dev/null
           sudo apt-get update
           sudo apt-get -y install openresty
-
+      - name: Git Checkout
+        uses: actions/checkout@v4
       - name: Build
         run: |
           /usr/local/openresty/luajit/bin/luajit -v
@@ -77,8 +76,8 @@ jobs:
           do
             /usr/local/openresty/luajit/bin/luajit -b "$file" "$file"
           done
-
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
+          name: script
           path: ./script
