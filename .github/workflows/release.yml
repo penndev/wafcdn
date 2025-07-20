@@ -91,7 +91,9 @@ jobs:
           name: script
           path: ./
       - name: Ls File
-        run: ls -al
+        run: |
+          chmod +x ./wafcdn
+          ls -al
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to Docker Hub

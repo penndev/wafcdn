@@ -16,15 +16,17 @@ RUN mkdir data
 RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.key -out ./conf/certificate.crt -config ./conf/ssl.conf
 
 # 设置Env环境
-ENV APP_MODE=prod
-ENV APP_LISTEN=:8000
-ENV APP_SECRET=secret
+# ENV APP_MODE=prod
+# ENV APP_LISTEN=:8000
+# 应该用户必须设置
+# ENV APP_SECRET=secret
 ENV APP_LOGGER_FILE=logs/app.log
 ENV APP_LOGGER_LEVEL=warn
 ENV DB_URL=postgres://postgres:123456@host.docker.internal:5432/wafcdn
 ENV CACHE_URL=redis://default:@host.docker.internal:6379/1
-ENV NGINX_BINARY=openresty
-ENV NGINX_PREFIX=./
+
+# ENV NGINX_BINARY=openresty
+# ENV NGINX_PREFIX=./
 
 
 EXPOSE 80 443 8000
