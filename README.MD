@@ -57,10 +57,21 @@ JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().get
     - 文件请求中断，缓存的文件会被清理
     - Range 请求会被被忽略缓存动作（因为range通常为大文件，直接回源的话!缓存穿透攻击!）
 
-# openresty 说明
+## docker运行
 
+启动命令
+
+```bash
+# 单机部署命令
+-e DB_URL=sqlite://sqlite.db -e CACHE_URL="ttlmap://memory" 
+
+docker run -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
+```
+
+## openresty 说明
+
+- 制作证书
 openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout private.key -out certificate.crt -config ssl.conf
-
 
 ```
 # docker启动
@@ -75,7 +86,6 @@ openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
 ```
 
 ![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
-
 
 
 

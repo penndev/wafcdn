@@ -13,7 +13,14 @@ local WAFCDN_PROXY = {}
     -- status 缓存状态
     -- uri 缓存uri
 function WAFCDN_PROXY.ROUTE(proxy)
-    local wafcdn_proxy_cache = { time = 0, uri = "", status = {} }
+    -- 生命周期传递参数
+    local wafcdn_proxy_cache = {}
+    wafcdn_proxy_cache.time = 0 -- 是否需要缓存如果<=0则不需要缓存
+    wafcdn_proxy_cache.uri = "" -- 缓存的链接，不包含域名，根据缓存规则来判断是否包含参数
+    wafcdn_proxy_cache.status = {} -- 只缓存固定的状态码，如果返回502则不缓存
+    wafcdn_proxy_cache.xcache = "" -- 缓存状态字符串
+
+    -- 只处理 wafcdn_proxy_cache.time 用来验证是否匹配缓存
     if proxy.cache then
         for _, cache in ipairs(proxy.cache) do
             -- 是否包含了缓存方法 GET,POST
@@ -33,54 +40,51 @@ function WAFCDN_PROXY.ROUTE(proxy)
             end
         end
     end
-    -- 判断是否命中
-    -- 如果缓存命中就直接跳转到对应的文件。
-    if wafcdn_proxy_cache.time > 0 and not ngx.var.http_range then
-        local res, _ = util.request("/@wafcdn/cache", {
-            query={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri=wafcdn_proxy_cache.uri},
-        })
 
-        if res then -- 缓存验证
+    -- 判断是否缓存命中文件 如果命中缓存，则proxy代理的生命周期结束。
+    if wafcdn_proxy_cache.time > 0 then
+        local res, _ = util.request("/@wafcdn/cache", {
+            query={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri = wafcdn_proxy_cache.uri},
+        })
+        -- 验证缓存文件是否存在。并在有效期内
+        if res then
             local cacheAge = ngx.time() - res.body.time
-            -- 验证缓存文件是否存在。没必要
-            -- 因为没有锁的情况下，必然有事件跨度。
-            -- 比如另外的线程删除文件，刚好在本进程在重定向期间就会发生404
             if cacheAge < wafcdn_proxy_cache.time then
                 -- 缓存命中 添加返回头
                 res.body.header["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time
                 res.body.header["Age"] = cacheAge
                 res.body.header["X-Cache"] = "HIT"
-                -- 清理掉一些缓存头
-                for _, key in ipairs({"connection", "content-length", "Accept-Ranges"}) do
-                    res.body.header[key] = nil
+                -- 清理掉一些上游缓存头
+                -- 目标清除的 header 键列表
+                local to_clear = {
+                    connection = true,
+                    ["content-length"] = true,
+                    ["accept-ranges"] = true,
+                }
+                for key, _ in pairs(res.body.header) do
+                    if to_clear[string.lower(key)] then
+                        res.body.header[key] = nil
+                    end
                 end
                 ngx.var.wafcdn_header = util.header_merge(res.body.header)
                 ngx.var.wafcdn_alias = util.json_encode({file = res.body.path})
-
-                -- ！！！！！ 这里是直接返回文件了
-                -- 返回静态文件
-                -- ngx.req.set_uri 不会执行任何的后续操作
+                -- 返回静态文件 ngx.req.set_uri 不会执行任何的后续操作
                 ngx.req.set_uri("/@alias", true)
+            else
+                wafcdn_proxy_cache.xcache = "EXPIRED"
             end
+        else
+            wafcdn_proxy_cache.xcache = "MISS"
         end
 
-        -- 多少分钟仅缓存一次 不然会形成竞争。
+        -- 10*60仅缓存一次 不然会形成竞争。
         local cache_key = ngx.md5(ngx.var.wafcdn_site..ngx.var.request_method..wafcdn_proxy_cache.uri)
         local value, flags = ngx.shared.cache_key:get(cache_key)
         if value == nil then
             ngx.shared.cache_key:set(cache_key, 1, 10*60)
-            -- 强制浏览器按照配置刷新，并设置响应状态。
-            ngx.var.wafcdn_header = util.header_merge({
-                ["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time,
-                ["X-Cache"] = "MISS"
-            })
         else
-            -- 已经有其他的线程在缓存文件了。 等待结果。就行。直接走反向代理。
+            wafcdn_proxy_cache.xcache = "BYPASS,CacheLock"
             wafcdn_proxy_cache.time = 0
-            ngx.var.wafcdn_header = util.header_merge({
-                ["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time,
-                ["X-Cache"] = "MISS-LOCK"
-            })
         end
     end
     proxy.cache = wafcdn_proxy_cache
@@ -196,10 +200,10 @@ function WAFCDN_PROXY.header_filter()
         local file, err = io.open(cache_path..".lock", "wb")
         if not file then
             if util.mkdir(string.match(cache_path, "(.*)/")) then
-                file, err = io.open(cache_path, "wb")
+                file, err = io.open(cache_path..".lock", "wb")
             end
             if not file then
-                ngx.log(ngx.ERR, "cant open file:[", cache_path, "]", err)
+                ngx.log(ngx.ERR, "cant open file:[", cache_path..".lock", "]", err)
             end
         end
 
@@ -215,9 +219,10 @@ function WAFCDN_PROXY.header_filter()
             }
         end
     else
-        -- 缓存错误
-        ngx.var.wafcdn_header = util.header_merge({["X-Cache"] = "ERROR",})
+        -- 缓存错误,正常情况下清理掉x-cache头
+        ngx.ctx.wafcdn_proxy_cache.xcache = "BYPASS,Response-"..ngx.status
     end
+    ngx.header["X-Cache"] = ngx.ctx.wafcdn_proxy_cache.xcache
     util.header_response()
 end
 
@@ -235,6 +240,7 @@ end
 
 -- 日志处理
 function WAFCDN_PROXY.log()
+    -- 处理缓存文件管理
     if ngx.ctx.docache and ngx.ctx.docache.file then
         ngx.ctx.docache.file:close()
         -- 去除.lock文件名 让远程接口操作。来控制缓存管理
@@ -258,7 +264,13 @@ function WAFCDN_PROXY.log()
                     body = util.json_encode(data)
                 })
                 if not res or res.status ~= 200 then
-                    ngx.log(ngx.ERR, "cache error: ", err, data.uri, data.method, data.path)
+                    ngx.log(
+                        ngx.ERR,
+                        " || route:", "/@wafcdn/cache",
+                        " || request:", util.json_encode(data),
+                        " || response:", util.json_encode(res),
+                        " || err:", err
+                    )
                 end
             end
             ngx.timer.at(0, handle)

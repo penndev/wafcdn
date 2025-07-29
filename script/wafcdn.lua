@@ -75,15 +75,30 @@ function WAFCDN.rewrite()
         return
     end
 
-    -- http请求强制https
-    if res.sslForce and not ngx.var.https then
-        ngx.redirect("https://" .. host .. ngx.var.request_uri, 301)
-        return
-    end
+    -- 设置全局变量
+    ngx.var.wafcdn_site = res.body.site -- 站点ID
+    ngx.var.wafcdn_header = util.json_encode(res.body.header)
 
     -- -- -- -- -- -- -- -- --
     -- !IP黑名单处理
     -- !IP区域控制
+    -- -- -- -- -- -- -- -- --
+    local ip = res.body.security.ip
+    if ip.status == true then
+        local _, ipcheckErr = util.request("/@wafcdn/ipcheck", {
+            query = {
+                site = ngx.var.wafcdn_site,
+                ip = ngx.var.remote_addr
+            },
+            cache = 3
+        })
+        if ipcheckErr ~= nil then
+            util.status(403, ipcheckErr)
+            return
+        end
+    end
+
+    -- -- -- -- -- -- -- -- --
     -- !User-Agent设备控制列表
     -- !Referrer引用控制
     -- -- -- -- -- -- -- -- --
@@ -101,11 +116,42 @@ function WAFCDN.rewrite()
     -- 接口验签
     local sign = res.body.security.sign
     if sign.status == true then
-        local allow, err = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
+        local allow, allowerr = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
         if not allow then
-            util.status(403, "Forbidden " .. err)
+            util.status(403, "Forbidden " .. allowerr)
             return
         end
+    end
+
+    -- 跨域处理
+    local cors = res.body.security.cors
+    if cors.status == true then
+        local corsHeader = {}
+        if cors.origin ~= "" then
+            corsHeader["Access-Control-Allow-Origin"] = cors.origin
+        end
+        if cors.method ~= "" then
+            corsHeader["Access-Control-Allow-Methods"] = cors.method
+        end
+        if cors.header ~= "" then
+            corsHeader["Access-Control-Allow-Headers"] = cors.header
+        end
+        if cors.credentials ~= "" then
+            corsHeader["Access-Control-Allow-Credentials"] = cors.credentials
+        end
+        if cors.age > 0 then
+            corsHeader["Access-Control-Max-Age"] = cors.age
+        end
+        ngx.var.wafcdn_header = util.header_merge(corsHeader)
+        if ngx.req.get_method() == "OPTIONS" then
+            return ngx.exit(204)
+        end
+    end
+
+    -- http请求强制https
+    if res.body.sslForce == true and ngx.var.https == "" then
+        ngx.redirect("https://" .. host .. ngx.var.request_uri, 301)
+        return
     end
 
     -- # 修正请求地址
@@ -130,9 +176,6 @@ end
 -- @param table data
 -- @return void
 function WAFCDN.ROUTE(body)
-    -- # 设置全局变量
-    ngx.var.wafcdn_site = body.site -- 站点ID
-    ngx.var.wafcdn_header = util.json_encode(body.header) -- 用户返回头
     -- 文件请求类型
     -- @type
     --  - proxy反向代理方式

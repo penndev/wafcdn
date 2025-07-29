@@ -195,6 +195,7 @@ end
 -- @param table new_header
 -- @return json string
 function util.header_merge(new_header)
+    -- 原始 header 解析
     if ngx.var.wafcdn_header == "" then
         return util.json_encode(new_header)
     end
@@ -202,19 +203,44 @@ function util.header_merge(new_header)
     if header == nil then
         return util.json_encode(new_header)
     end
-    for key, val in pairs(new_header) do
-        header[key] = val
+    -- 创建小写 key 映射：lower_key -> original_key
+    local key_map = {}
+    for k, _ in pairs(header) do
+        key_map[string.lower(k)] = k
+    end
+    -- 合并 new_header
+    for k, v in pairs(new_header) do
+        local lower_k = string.lower(k)
+        if v == "" then
+            -- 删除某个header的实现
+            header[k] = v
+        else
+            local origin_key = key_map[lower_k]
+            if origin_key then
+                -- 已存在该 header（大小写无关），更新值
+                -- 最早设置的有最高的权重
+                -- 取消注释则取反
+                -- header[origin_key] = v
+            else
+                header[k] = v
+                key_map[lower_k] = k
+            end
+        end
     end
     return util.json_encode(header)
 end
 
 
 function util.header_response()
-    ngx.header.Server = 'wafcdn'
     if ngx.var.wafcdn_header ~= "" then
         local header, _ = util.json_decode(ngx.var.wafcdn_header)
+        ngx.header.Server = 'wafcdn'
         for key, val in pairs(header or {}) do
-            ngx.header[key] = val
+            if val and val == "" then
+                ngx.header[key] = nil
+            else
+                ngx.header[key] = val
+            end
         end
     end
 end
@@ -246,7 +272,7 @@ function util.log()
             body = util.json_encode(data)
         })
         if not res or res.status ~= 200 then
-            ngx.log(ngx.ERR, "log error: ", err)
+            ngx.log(ngx.ERR, " /@wafcdn/log error:", err)
         end
     end
     ngx.timer.at(0, handle)

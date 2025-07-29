@@ -1,5 +1,7 @@
 FROM openresty/openresty
 
+ENV TZ=Asia/Shanghai
+
 WORKDIR /app
 
 # 执行文件
@@ -22,9 +24,8 @@ RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.
 # ENV APP_SECRET=secret
 ENV APP_LOGGER_FILE=logs/app.log
 ENV APP_LOGGER_LEVEL=warn
-ENV DB_URL=postgres://postgres:123456@host.docker.internal:5432/wafcdn
-ENV CACHE_URL=redis://default:@host.docker.internal:6379/1
-
+ENV DB_URL=sqlite://data/sqlite.db
+ENV CACHE_URL=mapttl://memory
 # ENV NGINX_BINARY=openresty
 # ENV NGINX_PREFIX=./
 
