@@ -6,14 +6,9 @@
 - 单连接限速
 - QPS限制
 - CC签名防御
+- IP地域限制
 - ×IP黑白名单
-- ×IP地域限制
 - ×客户端token校验(网页验证码)
-
-### 签名与加密
-
-JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().getTimezoneOffset() * 60)`
-
 
 
 ## CDN功能
@@ -63,7 +58,7 @@ JS标准UTC0时区的秒时间戳: `Math.ceil(Date.now()/1000) + (new Date().get
 
 ```bash
 # 单机部署命令
--e DB_URL=sqlite://sqlite.db -e CACHE_URL="ttlmap://memory" 
+-e DB_URL=sqlite://sqlite.db -e CACHE_URL=ttlmap://memory
 
 docker run -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
 ```

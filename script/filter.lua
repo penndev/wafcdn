@@ -56,7 +56,7 @@ function filter.sign(method, key, expireargs, signargs)
         return false, 'no_args_expire'
     end
     local expire_time = tonumber(args[expireargs])
-    local current_time = os.time(os.date("!*t"))
+    local current_time = os.time()
     if (expire_time < current_time) then
         return false, "expire"
     end

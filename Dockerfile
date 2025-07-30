@@ -24,7 +24,7 @@ RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.
 # ENV APP_SECRET=secret
 ENV APP_LOGGER_FILE=logs/app.log
 ENV APP_LOGGER_LEVEL=warn
-ENV DB_URL=sqlite://data/sqlite.db
+ENV DB_URL=sqlite://data/sqlite.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(3000)
 ENV CACHE_URL=mapttl://memory
 # ENV NGINX_BINARY=openresty
 # ENV NGINX_PREFIX=./
