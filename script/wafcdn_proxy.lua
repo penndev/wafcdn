@@ -109,8 +109,11 @@ function WAFCDN_PROXY.rewrite()
 
     -- 反向代理连接方式
     -- pass_proxy or upstream
-    if proxy.keepaliveRequests == 0 then -- 走 pass_proxy
-        ngx.var.wafcdn_proxy_server = proxy.server
+    -- 走 pass_proxy 必须走upstream
+    -- proxy_http_version 无法动态配置
+    if proxy.keepaliveRequests == 0 then
+        util.status(500, "INTERNAL_PROXY_REQUESTS_CONFIG_FAIL")
+        return
     else
         -- 走 upstream
         local protocol, ip, port = string.match(proxy.server, "^(%w+)://([^:/]+):?(%d*)$")
@@ -129,11 +132,10 @@ function WAFCDN_PROXY.rewrite()
             keepalive_requests = proxy.keepaliveRequests
         }
     end
-
     -- 设置回源请求头
-    ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
-    ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
-    ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
+    -- ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
+    -- ngx.req.set_header("X-Real-Port", ngx.var.remote_port)
+    -- ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
     -- ngx.req.set_header("X-Forwarded-Port", ngx.var.server_port)
     -- 自定义回源请求头
     for key, val in pairs(proxy.header or {}) do

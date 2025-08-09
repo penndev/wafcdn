@@ -7,7 +7,7 @@
 - QPS限制
 - CC签名防御
 - IP地域限制
-- ×IP黑白名单
+- IP地域+黑白名单
 - ×客户端token校验(网页验证码)
 
 
@@ -31,7 +31,7 @@
 - 使用nginx `ngx_http_core_module` 模块来响应缓存
     - 支持http-range请求
 
-## WAFCDN后台管理
+## 后台管理
 
 > 使用golang编写的api来操作整体的wafcdn运行情况 
 
@@ -52,36 +52,32 @@
     - 文件请求中断，缓存的文件会被清理
     - Range 请求会被被忽略缓存动作（因为range通常为大文件，直接回源的话!缓存穿透攻击!）
 
-## docker运行
+## 运行配置
 
-启动命令
+- 生成占位证书
+
+    ```bash
+    cd conf
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout private.key -out certificate.crt -config ssl.conf
+    ```
+
+- 配置缓存目录 `conf/nginx.conf` 下的 `WAFCDN_DATA_DIR` 配置
+
+Docker启动命令
 
 ```bash
 # 单机部署命令
 -e DB_URL=sqlite://sqlite.db -e CACHE_URL=ttlmap://memory
+-e DB_URL=postgres://postgres:123456@127.0.0.1:5432/wafcdn -e CACHE_URL=redis://default:@127.0.0.1:6379/1
 
 docker run -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
 ```
 
 ## openresty 说明
 
-- 制作证书
-openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout private.key -out certificate.crt -config ssl.conf
-
-```
-# docker启动
-docker run --name openresty -p 80:80 -v ./:/app -w /app -d openresty/openresty openresty -p ./ -g "daemon off;"
-
-
-# 启动
-openresty -p ./ 
-
-# 快速开发调试重启 
-openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./
-```
+- 快速开发调试重启 `openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./`
 
 ![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
-
 
 
 **依赖项**
