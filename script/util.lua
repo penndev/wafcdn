@@ -60,7 +60,7 @@ function util.request(uri, opt)
             return nil, msg
         end
         if res.status ~= 200 then
-            return nil, 'INTERNAL_HTTP_STATUS_' .. res.status
+            return nil, 'INTERNAL_HTTP_STATUS_' .. res.status .. '(' .. res.body .. ')'
         end
         if not res.body then
             return nil, 'INTERNAL_HTTP_BODY_FAIL'
@@ -248,7 +248,7 @@ end
 function util.log()
     local data = {
         -- 站点信息
-        site_id = tonumber(ngx.var.wafcdn_site),
+        site_id = tonumber(ngx.var.wafcdn_site) or 0,
         host = ngx.var.host,
         -- 客户端信息
         remote_addr = ngx.var.remote_addr,
