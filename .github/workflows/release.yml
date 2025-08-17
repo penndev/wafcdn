@@ -68,6 +68,7 @@ jobs:
             ./script
             ./conf
             ./Dockerfile
+            ./README.md
   docker:
     runs-on: ubuntu-latest
     needs:
