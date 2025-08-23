@@ -23,6 +23,11 @@ function WAFCDN_PROXY.ROUTE(proxy)
     -- 只处理 wafcdn_proxy_cache.time 用来验证是否匹配缓存
     if proxy.cache then
         for _, cache in ipairs(proxy.cache) do
+            -- 支持PURGE方法 快速清理缓存
+            if proxy.cache_purge then
+                table.insert(cache.method, "PURGE")
+            end
+            
             -- 是否包含了缓存方法 GET,POST
             if util.contains(ngx.var.request_method, cache.method) then
                 -- 是否忽略参数
@@ -50,6 +55,23 @@ function WAFCDN_PROXY.ROUTE(proxy)
         if res then
             local cacheAge = ngx.time() - res.body.time
             if cacheAge < wafcdn_proxy_cache.time then
+
+                -- 客户端主动清理缓存请求PURGE
+                if ngx.var.request_method == "PURGE" then
+                    local res, _ = util.request("/@wafcdn/purge", {
+                        query={ 
+                            site_id=ngx.var.wafcdn_site,
+                            uri = wafcdn_proxy_cache.uri
+                        },
+                    })
+                    if res == nil then
+                        util.status(400, err)
+                        return
+                    end
+                    ngx.say(res.body)
+                    return ngx.exit(res.status)
+                end
+
                 -- 缓存命中 添加返回头
                 res.body.header["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time
                 res.body.header["Age"] = cacheAge

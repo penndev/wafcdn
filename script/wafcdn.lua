@@ -56,6 +56,26 @@ function WAFCDN.ssl()
 end
 
 function WAFCDN.rewrite()
+
+    -- ACME申请证书用于验证的路径
+    if ngx.var.https == "" then
+        local acme_prefix = "/.well-known/acme-challenge/"
+        if ngx.var.uri:sub(1, #acme_prefix) == acme_prefix then
+            local token = ngx.var.uri:sub(#acme_prefix + 1)
+            local res, err = util.request("/@wafcdn/acme", {
+                query = {
+                    token = token
+                },
+            })
+            if res == nil then
+                util.status(404, err)
+                return
+            end
+            ngx.say(res.body)
+            return ngx.exit(res.status)
+        end
+    end
+    
     -- 获取域名
     local host = ngx.var.host
     if not host then
@@ -85,15 +105,15 @@ function WAFCDN.rewrite()
     -- -- -- -- -- -- -- -- --
     local ip = res.body.security.ip
     if ip.status == true then
-        local _, ipcheckErr = util.request("/@wafcdn/ipcheck", {
+        local _, ipErr = util.request("/@wafcdn/ip-verify", {
             query = {
                 site = ngx.var.wafcdn_site,
                 ip = ngx.var.remote_addr
             },
             cache = 3
         })
-        if ipcheckErr ~= nil then
-            util.status(403, ipcheckErr)
+        if ipErr ~= nil then
+            util.status(403, ipErr)
             return
         end
     end
@@ -116,9 +136,9 @@ function WAFCDN.rewrite()
     -- 接口验签
     local sign = res.body.security.sign
     if sign.status == true then
-        local allow, allowerr = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
+        local allow, allowErr = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
         if not allow then
-            util.status(403, "Forbidden " .. allowerr)
+            util.status(403, "Forbidden " .. allowErr)
             return
         end
     end
