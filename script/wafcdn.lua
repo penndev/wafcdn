@@ -90,8 +90,14 @@ function WAFCDN.rewrite()
         },
         cache = 3
     })
+
     if res == nil then
         util.status(404, err)
+        return
+    end
+
+    if  tonumber(res.body.site) == nil then
+        util.status(404, "SITE_NOT_SET")
         return
     end
 

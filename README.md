@@ -9,7 +9,7 @@
 - IP地域限制
 - IP地域+黑白名单
 
-**todo**
+**TODO**
 - 客户端token校验(网页验证码)
 - PURGE 请求方法支持，清理缓存
 
@@ -72,26 +72,16 @@
 
 - 配置缓存目录 `conf/nginx.conf` 下的 `WAFCDN_DATA_DIR` 配置
 
-Docker启动命令
-
-```bash
-# 小并发单机部署命令
-docker run -e DB_URL=sqlite://sqlite.db -e CACHE_URL=ttlmap://memory -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
-
-# 高并发运行
-docker run -e DB_URL=postgres://postgres:123456@127.0.0.1:5432/wafcdn -e CACHE_URL=redis://default:@127.0.0.1:6379/1 -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
-```
-
 ## openresty 说明
 
-- 快速开发调试重启 `openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./`
+- openresty生命周期[流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
 
-![流程图](https://raw.githubusercontent.com/openresty/lua-nginx-module/refs/heads/master/doc/images/lua_nginx_modules_directives.drawio.png)
+- 快速开发调试重启`openresty -p ./ -s stop && sleep 2 && rm -f logs/error.log && openresty -p ./`
 
 
 **依赖项**
 
-> 已经将依赖项本地化 ./script/resty 目录下
+> 已经将依赖项本地化 ./script/resty 目录下 以下内容只参考即可
 
 ```bash
 # Q 为什么要用三方库，而不是默认的`ngx.md5`这些

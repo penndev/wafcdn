@@ -1,5 +1,6 @@
 local ngx = require("ngx")
 local util = require("util")
+local lfs = require("lfs")
 local balancer = require("ngx.balancer")
 local init = require("init")
 
@@ -18,7 +19,7 @@ function WAFCDN_PROXY.ROUTE(proxy)
     wafcdn_proxy_cache.time = 0 -- 是否需要缓存如果<=0则不需要缓存
     wafcdn_proxy_cache.uri = "" -- 缓存的链接，不包含域名，根据缓存规则来判断是否包含参数
     wafcdn_proxy_cache.status = {} -- 只缓存固定的状态码，如果返回502则不缓存
-    wafcdn_proxy_cache.xcache = "" -- 缓存状态字符串
+    wafcdn_proxy_cache.xCache = "" -- 缓存状态字符串
 
     -- 只处理 wafcdn_proxy_cache.time 用来验证是否匹配缓存
     if proxy.cache then
@@ -27,7 +28,6 @@ function WAFCDN_PROXY.ROUTE(proxy)
             if proxy.cache_purge then
                 table.insert(cache.method, "PURGE")
             end
-            
             -- 是否包含了缓存方法 GET,POST
             if util.contains(ngx.var.request_method, cache.method) then
                 -- 是否忽略参数
@@ -48,6 +48,22 @@ function WAFCDN_PROXY.ROUTE(proxy)
 
     -- 判断是否缓存命中文件 如果命中缓存，则proxy代理的生命周期结束。
     if wafcdn_proxy_cache.time > 0 then
+        -- 客户端主动清理缓存请求PURGE
+        if ngx.var.request_method == "PURGE" then
+            local res, err = util.request("/@wafcdn/purge", {
+                query={ 
+                    site_id=ngx.var.wafcdn_site,
+                    uri = wafcdn_proxy_cache.uri
+                },
+            })
+            if err ~= nil then
+                util.status(202, err)
+                return
+            end
+            util.status(200, res.body)
+            return
+        end
+
         local res, _ = util.request("/@wafcdn/cache", {
             query={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri = wafcdn_proxy_cache.uri},
         })
@@ -55,23 +71,6 @@ function WAFCDN_PROXY.ROUTE(proxy)
         if res then
             local cacheAge = ngx.time() - res.body.time
             if cacheAge < wafcdn_proxy_cache.time then
-
-                -- 客户端主动清理缓存请求PURGE
-                if ngx.var.request_method == "PURGE" then
-                    local res, _ = util.request("/@wafcdn/purge", {
-                        query={ 
-                            site_id=ngx.var.wafcdn_site,
-                            uri = wafcdn_proxy_cache.uri
-                        },
-                    })
-                    if res == nil then
-                        util.status(400, err)
-                        return
-                    end
-                    ngx.say(res.body)
-                    return ngx.exit(res.status)
-                end
-
                 -- 缓存命中 添加返回头
                 res.body.header["Cache-Control"] = "max-age=" .. wafcdn_proxy_cache.time
                 res.body.header["Age"] = cacheAge
@@ -93,21 +92,27 @@ function WAFCDN_PROXY.ROUTE(proxy)
                 -- 返回静态文件 ngx.req.set_uri 不会执行任何的后续操作
                 ngx.req.set_uri("/@alias", true)
             else
-                wafcdn_proxy_cache.xcache = "EXPIRED"
+                wafcdn_proxy_cache.xCache = "EXPIRED"
             end
         else
-            wafcdn_proxy_cache.xcache = "MISS"
+            wafcdn_proxy_cache.xCache = "MISS"
         end
 
-        -- 10*60仅缓存一次 不然会形成竞争。
-        local cache_key = ngx.md5(ngx.var.wafcdn_site..ngx.var.request_method..wafcdn_proxy_cache.uri)
-        local value, flags = ngx.shared.cache_key:get(cache_key)
-        if value == nil then
-            ngx.shared.cache_key:set(cache_key, 1, 10*60)
-        else
-            wafcdn_proxy_cache.xcache = "BYPASS,CacheLock"
+        -- 仅缓存一次 不然会形成竞争。
+        local cache_lock = util.cache_path(ngx.var.request_method, wafcdn_proxy_cache.uri) --..".lock"
+        local attr = lfs.attributes(cache_lock)
+        if attr then
+            wafcdn_proxy_cache.xCache = "BYPASS,CacheLock-".. tostring(ngx.time() - attr.modification)
             wafcdn_proxy_cache.time = 0
         end
+        -- local cache_key = ngx.md5(ngx.var.wafcdn_site..ngx.var.request_method..wafcdn_proxy_cache.uri)
+        -- local value, flags = ngx.shared.cache_key:get(cache_key)
+        -- if value == nil then
+        --     ngx.shared.cache_key:set(cache_key, 1, 30) -- 30秒内仅缓存一次
+        -- else
+        --     wafcdn_proxy_cache.xCache = "BYPASS,CacheLock"
+        --     wafcdn_proxy_cache.time = 0
+        -- end
     end
     proxy.cache = wafcdn_proxy_cache
     ngx.var.wafcdn_proxy = util.json_encode(proxy)
@@ -211,15 +216,7 @@ function WAFCDN_PROXY.header_filter()
     -- 是否命中响应状态
     if ngx.ctx.wafcdn_proxy_cache.time > 0 and util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
         -- 缓存的key做md5
-        local cache_key = ngx.md5(ngx.var.request_method .. ngx.ctx.wafcdn_proxy_cache.uri)
-        local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
-        local cache_path = string.format("%s/%s/%s/%s/%s",
-            init.WAFCDN_DATA_DIR,
-            ngx.var.wafcdn_site,
-            dir1,
-            dir2,
-            cache_key
-        )
+        local cache_path = util.cache_path(ngx.var.request_method, ngx.ctx.wafcdn_proxy_cache.uri)
         -- 创建缓存文件
         local file, err = io.open(cache_path..".lock", "wb")
         if not file then
@@ -242,11 +239,8 @@ function WAFCDN_PROXY.header_filter()
                 time = ngx.time() -- 缓存时间
             }
         end
-    else
-        -- 缓存错误,正常情况下清理掉x-cache头
-        ngx.ctx.wafcdn_proxy_cache.xcache = "BYPASS,Response-"..ngx.status
     end
-    ngx.header["X-Cache"] = ngx.ctx.wafcdn_proxy_cache.xcache
+    ngx.header["X-Cache"] = ngx.ctx.wafcdn_proxy_cache.xCache
     util.header_response()
 end
 

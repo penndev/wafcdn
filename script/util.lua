@@ -145,6 +145,19 @@ function util.hmac(method, key, message)
     return hmac_method:final()
 end
 
+function util.cache_path(method, uri) 
+    local cache_key = ngx.md5(method .. uri)
+    local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
+    local cache_path = string.format("%s/%s/%s/%s/%s",
+        init.WAFCDN_DATA_DIR,
+        ngx.var.wafcdn_site,
+        dir1,
+        dir2,
+        cache_key
+    )
+    return cache_path
+end
+
 -- 判断数组是否包含某个值`
 function util.contains(value, array)
     for _, v in ipairs(array) do
@@ -186,8 +199,7 @@ end
 -- @param message 信息
 -- @return void
 function util.status(status, message)
-    ngx.status = status
-    ngx.say(status .. "->" .. message)
+    ngx.say(util.json_encode(message))
     ngx.exit(status)
 end
 
