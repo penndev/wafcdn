@@ -142,7 +142,7 @@ function WAFCDN.rewrite()
     -- 接口验签
     local sign = res.body.security.sign
     if sign.status == true then
-        local allow, allowErr = filter.sign(sign.method, sign.key, sign.expireargs, sign.signargs)
+        local allow, allowErr = filter.sign(sign.method, sign.key, sign.expire_args, sign.sign_args)
         if not allow then
             util.status(403, "Forbidden " .. allowErr)
             return

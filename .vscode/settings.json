@@ -4,6 +4,7 @@
         "Docache",
         "fffonion",
         "godotenv",
+        "hmac",
         "keepalive",
         "resty",
         "wafcdn"

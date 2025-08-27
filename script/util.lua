@@ -199,7 +199,8 @@ end
 -- @param message 信息
 -- @return void
 function util.status(status, message)
-    ngx.say(util.json_encode(message))
+    ngx.status = status
+    ngx.say(message or "nil")
     ngx.exit(status)
 end
 
