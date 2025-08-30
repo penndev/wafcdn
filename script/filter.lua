@@ -9,7 +9,7 @@ local filter = {}
 -- @param rate number 允许的流量速率（单位：请求速度 kb/s）
 -- @param qps number 允许的最大 QPS（每秒查询数）
 -- @param burst number 允许的突发请求数（短时间内允许的最大请求数）也就是合计burst/qps秒内允许的最多请求。
--- @return 
+-- @return 返回真则限制
 function filter.limit(qps, burst)
     if qps > 0 then
         local lim, err = limit_req.new("limit_req", qps, burst)
@@ -22,16 +22,20 @@ function filter.limit(qps, burst)
         local delay, err = lim:incoming(key, true)
         if not delay then
             if err == "rejected" then
-                return false -- 超过 rate+burst → 拒绝
+                return true -- 超过 rate+burst → 拒绝
             end
             ngx.log(ngx.ERR, "lim:incoming error: ", err) -- 拦截失效
+            return false
+        end
+        if delay > 1 then
             return true
         end
         if delay > 0 then
-            return false
+            -- return false
+            ngx.sleep(delay)
         end
     end
-    return true
+    return false
 end
 
 -- 进行get签名验证

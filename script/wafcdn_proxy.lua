@@ -66,6 +66,7 @@ function WAFCDN_PROXY.ROUTE(proxy)
 
         local res, _ = util.request("/@wafcdn/cache", {
             query={ site_id=ngx.var.wafcdn_site, method=ngx.var.request_method, uri = wafcdn_proxy_cache.uri},
+            cache=1
         })
         -- 验证缓存文件是否存在。并在有效期内
         if res then
@@ -99,20 +100,16 @@ function WAFCDN_PROXY.ROUTE(proxy)
         end
 
         -- 仅缓存一次 不然会形成竞争。
-        local cache_lock = util.cache_path(ngx.var.request_method, wafcdn_proxy_cache.uri) --..".lock"
+        local cache_lock = util.cache_path(ngx.var.request_method, wafcdn_proxy_cache.uri)..".lock"
         local attr = lfs.attributes(cache_lock)
         if attr then
-            wafcdn_proxy_cache.xCache = "BYPASS,CacheLock-".. tostring(ngx.time() - attr.modification)
+            local cacheWait = ngx.time() - attr.modification
+            wafcdn_proxy_cache.xCache = "BYPASS,CacheLock-".. tostring(cacheWait)
+            if cacheWait > 3600 then -- 超过一个小时还在缓存的文件
+                os.remove(cache_lock)
+            end
             wafcdn_proxy_cache.time = 0
         end
-        -- local cache_key = ngx.md5(ngx.var.wafcdn_site..ngx.var.request_method..wafcdn_proxy_cache.uri)
-        -- local value, flags = ngx.shared.cache_key:get(cache_key)
-        -- if value == nil then
-        --     ngx.shared.cache_key:set(cache_key, 1, 30) -- 30秒内仅缓存一次
-        -- else
-        --     wafcdn_proxy_cache.xCache = "BYPASS,CacheLock"
-        --     wafcdn_proxy_cache.time = 0
-        -- end
     end
     proxy.cache = wafcdn_proxy_cache
     ngx.var.wafcdn_proxy = util.json_encode(proxy)

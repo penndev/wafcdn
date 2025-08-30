@@ -138,7 +138,6 @@ function WAFCDN.rewrite()
         if limit.rate > 0 then
             ngx.var.limit_rate = limit.rate .. "k"
         end
-
         local limited = filter.limit(limit.queries / limit.seconds, limit.queries)
         if limited then
             util.status(429, "Too Many Requests")
