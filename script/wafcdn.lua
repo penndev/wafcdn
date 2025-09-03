@@ -9,73 +9,72 @@ local WAFCDN = {}
 function WAFCDN.ssl()
     local hostname, err = ssl.server_name()
     if not hostname then
-        ngx.log(ngx.INFO, "failed to get server_name certificates:", err)
+        -- ngx.log(ngx.INFO, "failed to get server_name certificates:", err)
         return ngx.exit(ngx.ERROR)
     end
 
     local cleared, err = ssl.clear_certs()
     if not cleared then
-        ngx.log(ngx.ERR, "failed to clear existing (fallback) certificates:", err)
+        -- ngx.log(ngx.ERR, "failed to clear existing (fallback) certificates:", err)
         return ngx.exit(ngx.ERROR)
     end
 
     local domain, err = util.request("/@wafcdn/ssl", {
-        query = {
-            host = hostname
-        },
+        query = {host = hostname},
         cache = 10
     })
     if not domain then
-        ngx.log(ngx.INFO, "failed to get api domain:", hostname, " ", err)
+        -- ngx.log(ngx.INFO, "failed to get api domain:", hostname, " ", err)
         return ngx.exit(ngx.ERROR)
     end
     -- 设置公钥
     local cert, err = ssl.cert_pem_to_der(domain.body.publicKey)
     if not cert then
-        ngx.log(ngx.ERR, "failed to convert certificate chain from PEM to DER: ", err)
+        -- ngx.log(ngx.ERR, "failed to convert certificate chain from PEM to DER: ", err)
         return ngx.exit(ngx.ERROR)
     end
 
     local public, err = ssl.set_der_cert(cert)
     if not public then
-        ngx.log(ngx.ERR, "failed to set DER cert:", err)
+        -- ngx.log(ngx.ERR, "failed to set DER cert:", err)
         return ngx.exit(ngx.ERROR)
     end
 
     -- 设置私钥
     local key, err = ssl.priv_key_pem_to_der(domain.body.privateKey)
     if not key then
-        ngx.log(ngx.ERR, "failed to convert private key from PEM to DER:", err)
+        -- ngx.log(ngx.ERR, "failed to convert private key from PEM to DER:", err)
         return ngx.exit(ngx.ERROR)
     end
     local private, err = ssl.set_der_priv_key(key)
     if not private then
-        ngx.log(ngx.ERR, "failed to set DER private key:", err)
+        -- ngx.log(ngx.ERR, "failed to set DER private key:", err)
         return ngx.exit(ngx.ERROR)
     end
 end
 
-function WAFCDN.rewrite()
-
-    -- ACME申请证书用于验证的路径
-    if ngx.var.https == "" then
-        local acme_prefix = "/.well-known/acme-challenge/"
-        if ngx.var.uri:sub(1, #acme_prefix) == acme_prefix then
-            local token = ngx.var.uri:sub(#acme_prefix + 1)
-            local res, err = util.request("/@wafcdn/acme", {
-                query = {
-                    token = token
-                },
-            })
-            if res == nil then
-                util.status(404, err)
-                return
-            end
-            ngx.say(res.body)
-            return ngx.exit(res.status)
-        end
+function WAFCDN.acme()
+    if ngx.var.https ~= "" then
+        util.status(404, "ACME_NOT_HTTPS")
+        return
     end
-    
+
+    local token = ngx.var.uri:sub(#"/.well-known/acme-challenge/" + 1)
+    if token == nil or token == "" then
+        util.status(404, "ACME_NOT_FOUND")
+        return
+    end
+
+    local res, err = util.request("/@wafcdn/acme", {query = { token = token },})
+    if res == nil then
+        util.status(404, err)
+        return
+    end
+    ngx.say(res.body)
+    return ngx.exit(res.status)
+end
+
+function WAFCDN.rewrite()
     -- 获取域名
     local host = ngx.var.host
     if not host then

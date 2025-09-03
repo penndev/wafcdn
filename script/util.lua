@@ -200,7 +200,7 @@ end
 -- @return void
 function util.status(status, message)
     ngx.status = status
-    ngx.say(message or "nil")
+    ngx.say(tostring(status) .. message or "nil")
     ngx.exit(status)
 end
 
