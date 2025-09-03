@@ -258,6 +258,9 @@ function util.header_response()
     end
 end
 
+
+
+local log_buffer = ngx.shared.wafcdn_log
 function util.log()
     local data = {
         -- 站点信息
@@ -276,19 +279,65 @@ function util.log()
         bytes_received = tonumber(ngx.var.request_length),
         bytes_sent = tonumber(ngx.var.bytes_sent)
     }
-    local handle = function()
+
+    -- 直接 push 到队列字符串
+    local ok, err = log_buffer:rpush("queue", util.json_encode(data))
+    if not ok then
+        ngx.log(ngx.ERR, "log push failed: ", err)
+    end
+
+
+    -- local handle = function()
+    --     local res, err = util.request("/@wafcdn/log", {
+    --         method = "PUT",
+    --         headers = {
+    --             ["Content-Type"] = "application/json"
+    --         },
+    --         body = util.json_encode(data)
+    --     })
+    --     if not res or res.status ~= 200 then
+    --         ngx.log(ngx.ERR, " /@wafcdn/log error:", err)
+    --     end
+    -- end
+    -- ngx.timer.at(0, handle)
+end
+
+function util.flush_logs()
+    local logs = {}
+    for i = 1, 1000 do   -- 每次最多取 1000 条，避免太大
+        local log, err = log_buffer:lpop("queue")
+        if not log then
+            break
+        end
+        table.insert(logs, util.json_decode(log))
+    end
+
+    if #logs > 0 then
         local res, err = util.request("/@wafcdn/log", {
             method = "PUT",
-            headers = {
-                ["Content-Type"] = "application/json"
-            },
-            body = util.json_encode(data)
+            headers = {["Content-Type"] = "application/json"},
+            body = util.json_encode(logs)
         })
         if not res or res.status ~= 200 then
-            ngx.log(ngx.ERR, " /@wafcdn/log error:", err)
+            ngx.log(ngx.ERR, "/@wafcdn/log batch upload failed: ", err)
+            -- 失败了可以考虑再 rpush 回去，避免丢日志
         end
+    else
+        ngx.sleep(0.5)
     end
-    ngx.timer.at(0, handle)
+
+    -- 继续注册下一个定时器（循环执行）
+    local ok, err = ngx.timer.at(0.1, util.flush_logs)
+    if not ok then
+        ngx.log(ngx.ERR, "failed to schedule flush_logs: ", err)
+    end
+end
+
+function util.flush_worker()
+    local ok, err = ngx.timer.at(1, util.flush_logs)
+    if not ok then
+        ngx.log(ngx.ERR, "failed to start log timer: ", err)
+    end
 end
 
 return util

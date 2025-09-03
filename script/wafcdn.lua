@@ -130,9 +130,15 @@ function WAFCDN.rewrite()
 
     -- rate单链接限速，并发请求限速。
     local limit = res.body.security.limit
+
+    -- 限速器第一次初始化bug
+    -- 不能动态多站长使用，建议改成level级别让站长选择
     if limit.status == true then
-        local allow = filter.limit(limit.rate, limit.queries / limit.seconds, limit.queries)
-        if not allow then
+        if limit.rate > 0 then
+            ngx.var.limit_rate = limit.rate .. "k"
+        end
+        local limited = filter.limit(limit.queries / limit.seconds, limit.queries)
+        if limited then
             util.status(429, "Too Many Requests")
             return
         end
