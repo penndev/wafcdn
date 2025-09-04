@@ -145,19 +145,6 @@ function util.hmac(method, key, message)
     return hmac_method:final()
 end
 
-function util.cache_path(method, uri) 
-    local cache_key = ngx.md5(method .. uri)
-    local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
-    local cache_path = string.format("%s/%s/%s/%s/%s",
-        init.WAFCDN_DATA_DIR,
-        ngx.var.wafcdn_site,
-        dir1,
-        dir2,
-        cache_key
-    )
-    return cache_path
-end
-
 -- 判断数组是否包含某个值`
 function util.contains(value, array)
     for _, v in ipairs(array) do
@@ -259,9 +246,44 @@ function util.header_response()
 end
 
 
+function util.cache_path(method, uri) 
+    local cache_key = ngx.md5(method .. uri)
+    local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
+    local cache_path = string.format("%s/%s/%s/%s/%s",
+        init.WAFCDN_DATA_DIR,
+        ngx.var.wafcdn_site,
+        dir1,
+        dir2,
+        cache_key
+    )
+    return cache_path
+end
 
+function util.cache_header(path)
+    local file = io.open(path..".head", "r")
+    if not file then
+        return nil
+    end
+    local content = file:read("*a")
+    file:close()
+    local header, err = util.json_decode(content)
+    if not header then
+        return nil
+    end
+    local headerMinus = {
+        connection = true, ["content-length"] = true, ["accept-ranges"] = true,
+    }
+    for key, _ in pairs(header) do
+        if headerMinus[string.lower(key)] then header[key] = nil end
+    end
+    return header
+end
+
+-- 
+--  批量上传日志
+-- 
 local log_buffer = ngx.shared.wafcdn_log
-function util.log()
+function util.log() -- 供请求周期用
     local data = {
         -- 站点信息
         site_id = tonumber(ngx.var.wafcdn_site) or 0,
@@ -285,24 +307,8 @@ function util.log()
     if not ok then
         ngx.log(ngx.ERR, "log push failed: ", err)
     end
-
-
-    -- local handle = function()
-    --     local res, err = util.request("/@wafcdn/log", {
-    --         method = "PUT",
-    --         headers = {
-    --             ["Content-Type"] = "application/json"
-    --         },
-    --         body = util.json_encode(data)
-    --     })
-    --     if not res or res.status ~= 200 then
-    --         ngx.log(ngx.ERR, " /@wafcdn/log error:", err)
-    --     end
-    -- end
-    -- ngx.timer.at(0, handle)
 end
-
-function util.flush_logs()
+function util._log_flush() -- 定是任务循环的周期，不能直接调用。
     local logs = {}
     for i = 1, 1000 do   -- 每次最多取 1000 条，避免太大
         local log, err = log_buffer:lpop("queue")
@@ -323,21 +329,23 @@ function util.flush_logs()
             -- 失败了可以考虑再 rpush 回去，避免丢日志
         end
     else
-        ngx.sleep(0.5)
+        ngx.sleep(0.5) -- 没有日志则休眠一会再下次执行。
     end
 
     -- 继续注册下一个定时器（循环执行）
-    local ok, err = ngx.timer.at(0.1, util.flush_logs)
+    local ok, err = ngx.timer.at(0, util._log_flush)
     if not ok then
         ngx.log(ngx.ERR, "failed to schedule flush_logs: ", err)
     end
 end
-
-function util.flush_worker()
-    local ok, err = ngx.timer.at(1, util.flush_logs)
+function util.log_worker() -- 后台定时任务的入口
+    local ok, err = ngx.timer.at(1, util._log_flush)
     if not ok then
         ngx.log(ngx.ERR, "failed to start log timer: ", err)
     end
 end
+-- 
+--  批量上传日志 -- end
+-- 
 
 return util

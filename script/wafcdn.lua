@@ -84,9 +84,7 @@ function WAFCDN.rewrite()
 
     -- 获取域名后台配置
     local res, err = util.request("/@wafcdn/domain", {
-        query = {
-            host = host
-        },
+        query = {host = host},
         cache = 3
     })
 
@@ -123,16 +121,9 @@ function WAFCDN.rewrite()
         end
     end
 
-    -- -- -- -- -- -- -- -- --
-    -- !User-Agent设备控制列表
-    -- !Referrer引用控制
-    -- -- -- -- -- -- -- -- --
 
     -- rate单链接限速，并发请求限速。
     local limit = res.body.security.limit
-
-    -- 限速器第一次初始化bug
-    -- 不能动态多站长使用，建议改成level级别让站长选择
     if limit.status == true then
         if limit.rate > 0 then
             ngx.var.limit_rate = limit.rate .. "k"
@@ -154,7 +145,7 @@ function WAFCDN.rewrite()
         end
     end
 
-    -- 跨域处理
+    -- 跨域预处理，降低api代理请求数量
     local cors = res.body.security.cors
     if cors.status == true then
         local corsHeader = {}
@@ -185,28 +176,26 @@ function WAFCDN.rewrite()
         return
     end
 
-    -- # 修正请求地址
-    -- 从其他地方重定向过来的 会在原本请求url中添加 /rewrite
-    -- 但是ngx.var.request_uri未改变，
-    -- 所以可以对比开头来判断是否是重定向过来的
-    if string.sub(ngx.var.uri, 0, 9) == "/rewrite/" then
-        if string.sub(ngx.var.request_uri, 0, 9) ~= "/rewrite/" then
-            ngx.req.set_uri(string.sub(ngx.var.uri, 9), false)
-        end
-    end
-
     WAFCDN.ROUTE(res.body)
-end
-
--- 处理用户设置的header头
-function WAFCDN.header_filter()
-    util.header_response()
 end
 
 -- 路由
 -- @param table data
 -- @return void
 function WAFCDN.ROUTE(body)
+
+    -- # 修正请求地址
+    -- 从其他地方重定向过来的 会在原本请求url中添加 /rewrite
+    -- 但是ngx.var.request_uri未改变，
+    -- 所以可以对比开头来判断是否是重定向过来的
+    -- 修正为原始应该请求的uri
+    if string.sub(ngx.var.uri, 0, 9) == "/rewrite/" then
+        if string.sub(ngx.var.request_uri, 0, 9) ~= "/rewrite/" then
+            ngx.req.set_uri(string.sub(ngx.var.uri, 9), false)
+        end
+    end
+
+
     -- 文件请求类型
     -- @type
     --  - proxy反向代理方式
@@ -216,15 +205,14 @@ function WAFCDN.ROUTE(body)
     if body.type == "proxy" then
         proxy.ROUTE(body.proxy)
         return
-        -- elseif body.type == "alisa" then
-        --     -- 固定缓存的文件根据请求地址来计算静态文件是哪个。
-        --     -- ngx.var.wafcdn_static = util.json_encode({file = body.file})
-        --     -- ngx.req.set_uri("/@alisa", true)
-        --     return
     else
         util.status(403, "INTERNAL_FAILED_SITE_TYPE")
         return
     end
+end
+
+function WAFCDN.header_filter()
+    util.header_response()
 end
 
 function WAFCDN.log()
