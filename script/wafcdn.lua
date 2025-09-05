@@ -20,7 +20,7 @@ function WAFCDN.ssl()
     end
 
     local domain, err = util.request("/@wafcdn/ssl", {
-        query = {host = hostname},
+        query = { host = hostname },
         cache = 10
     })
     if not domain then
@@ -65,7 +65,7 @@ function WAFCDN.acme()
         return
     end
 
-    local res, err = util.request("/@wafcdn/acme", {query = { token = token },})
+    local res, err = util.request("/@wafcdn/acme", { query = { token = token }, })
     if res == nil then
         util.status(404, err)
         return
@@ -84,7 +84,7 @@ function WAFCDN.rewrite()
 
     -- 获取域名后台配置
     local res, err = util.request("/@wafcdn/domain", {
-        query = {host = host},
+        query = { host = host },
         cache = 3
     })
 
@@ -93,7 +93,7 @@ function WAFCDN.rewrite()
         return
     end
 
-    if  tonumber(res.body.site) == nil then
+    if tonumber(res.body.site) == nil then
         util.status(404, "SITE_NOT_SET")
         return
     end
@@ -183,7 +183,6 @@ end
 -- @param table data
 -- @return void
 function WAFCDN.ROUTE(body)
-
     -- # 修正请求地址
     -- 从其他地方重定向过来的 会在原本请求url中添加 /rewrite
     -- 但是ngx.var.request_uri未改变，

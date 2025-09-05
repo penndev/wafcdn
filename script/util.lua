@@ -13,8 +13,8 @@ local util = {}
 -- json编码器
 -- @param any
 -- @return result, error
-    -- string
-    -- nil, string
+-- string
+-- nil, string
 function util.json_encode(data)
     local ok, result = pcall(cjson.encode, data)
     if ok then
@@ -27,8 +27,8 @@ end
 -- json解码器
 -- @param string
 -- @return result, error
-    -- table
-    -- nil, string
+-- table
+-- nil, string
 function util.json_decode(data)
     local ok, result = pcall(cjson.decode, data)
     if ok then
@@ -37,7 +37,6 @@ function util.json_decode(data)
         return nil, "JSON decode error: " .. tostring(result)
     end
 end
-
 
 -- 发起与主控网络请求
 -- https://github.com/ledgetech/lua-resty-http?tab=readme-ov-file#request_uri
@@ -77,7 +76,7 @@ function util.request(uri, opt)
     end
     -- 缓存http结果
     if opt and opt.cache and opt.cache > 0 then
-        local cache_key = ngx.md5(uri..util.json_encode(opt))
+        local cache_key = ngx.md5(uri .. util.json_encode(opt))
         -- 读取缓存
         local value, _ = ngx.shared.request:get(cache_key)
         if value then
@@ -112,7 +111,7 @@ function util.request(uri, opt)
         local res, err = request(uri, opt)
         unlock()
         if res then
-            local data,err = util.json_encode(res)
+            local data, err = util.json_encode(res)
             if not data then
                 ngx.log(ngx.ERR, "json encode err:", err)
             end
@@ -180,14 +179,13 @@ function util.mkdir(path)
     return res
 end
 
-
 -- 返回http的状态码
 -- @param status 状态码
 -- @param message 信息
 -- @return void
 function util.status(status, message)
     ngx.status = status
-    ngx.say(tostring(status) .. message or "nil")
+    ngx.say(tostring(status) .. (message or "nil"))
     ngx.exit(status)
 end
 
@@ -230,7 +228,6 @@ function util.header_merge(new_header)
     return util.json_encode(header)
 end
 
-
 function util.header_response()
     if ngx.var.wafcdn_header ~= "" then
         local header, _ = util.json_decode(ngx.var.wafcdn_header)
@@ -245,8 +242,7 @@ function util.header_response()
     end
 end
 
-
-function util.cache_path(method, uri) 
+function util.cache_path(method, uri)
     local cache_key = ngx.md5(method .. uri)
     local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
     local cache_path = string.format("%s/%s/%s/%s/%s",
@@ -260,7 +256,7 @@ function util.cache_path(method, uri)
 end
 
 function util.cache_header(path)
-    local file = io.open(path..".head", "r")
+    local file = io.open(path .. ".head", "r")
     if not file then
         return nil
     end
@@ -279,9 +275,9 @@ function util.cache_header(path)
     return header
 end
 
--- 
+--
 --  批量上传日志
--- 
+--
 local log_buffer = ngx.shared.wafcdn_log
 function util.log() -- 供请求周期用
     local data = {
@@ -308,9 +304,10 @@ function util.log() -- 供请求周期用
         ngx.log(ngx.ERR, "log push failed: ", err)
     end
 end
+
 function util._log_flush() -- 定是任务循环的周期，不能直接调用。
     local logs = {}
-    for i = 1, 1000 do   -- 每次最多取 1000 条，避免太大
+    for i = 1, 1000 do     -- 每次最多取 1000 条，避免太大
         local log, err = log_buffer:lpop("queue")
         if not log then
             break
@@ -321,7 +318,7 @@ function util._log_flush() -- 定是任务循环的周期，不能直接调用�
     if #logs > 0 then
         local res, err = util.request("/@wafcdn/log", {
             method = "PUT",
-            headers = {["Content-Type"] = "application/json"},
+            headers = { ["Content-Type"] = "application/json" },
             body = util.json_encode(logs)
         })
         if not res or res.status ~= 200 then
@@ -338,14 +335,16 @@ function util._log_flush() -- 定是任务循环的周期，不能直接调用�
         ngx.log(ngx.ERR, "failed to schedule flush_logs: ", err)
     end
 end
+
 function util.log_worker() -- 后台定时任务的入口
     local ok, err = ngx.timer.at(1, util._log_flush)
     if not ok then
         ngx.log(ngx.ERR, "failed to start log timer: ", err)
     end
 end
--- 
+
+--
 --  批量上传日志 -- end
--- 
+--
 
 return util
