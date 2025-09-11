@@ -14,7 +14,7 @@ COPY ./conf /app/conf
 
 # 初始化
 RUN mkdir logs
-RUN mkdir data
+RUN mkdir /data
 RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.key -out ./conf/certificate.crt -config ./conf/ssl.conf
 
 # 设置Env环境
@@ -24,7 +24,7 @@ RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.
 # ENV APP_SECRET=secret
 ENV APP_LOGGER_FILE=logs/app.log
 ENV APP_LOGGER_LEVEL=warn
-ENV DB_URL=sqlite://data/sqlite.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(3000)
+ENV DB_URL=sqlite://sqlite.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(3000)
 ENV CACHE_URL=ttlmap://memory
 # ENV NGINX_BINARY=openresty
 # ENV NGINX_PREFIX=./
