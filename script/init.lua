@@ -28,7 +28,7 @@ end
 -- 交互的API接口超时时间
 local wafcdn_api_timeout = tonumber(os.getenv("WAFCDN_API_TIMEOUT"))
 if wafcdn_api_timeout == nil then
-    wafcdn_api_timeout = 3000
+    wafcdn_api_timeout = 30000
 end
 
 

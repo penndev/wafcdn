@@ -85,15 +85,16 @@ function WAFCDN_PROXY.ROUTE(proxy)
                 wafcdn_proxy_cache.xCache = "STALE"
             end
         end
-        -- 走到这里肯定是要缓存的-增加缓存锁
-        local attr = lfs.attributes(wafcdn_proxy_cache.path .. ".lock")
-        if attr then
-            local cacheWait = ngx.time() - attr.modification
-            wafcdn_proxy_cache.xCache = "LOCK-" .. tostring(cacheWait)
-            if cacheWait > 3600 then -- 超过一个小时还在缓存的文件
-                os.remove(wafcdn_proxy_cache.path .. ".lock")
+        -- 还存在竞争 应用share锁
+        if wafcdn_proxy_cache.time > 0 then
+            local cache_key = ngx.md5(ngx.var.wafcdn_site .. ngx.var.request_method .. wafcdn_proxy_cache.uri)
+            local value, flags = ngx.shared.cache_key:get(cache_key)
+            if value == nil then
+                ngx.shared.cache_key:set(cache_key, 1, 1)
+            else
+                wafcdn_proxy_cache.xcache = "LOCK-MEMORY"
+                wafcdn_proxy_cache.time = 0
             end
-            wafcdn_proxy_cache.time = 0
         end
         if ngx.var.http_range then --范围请求不缓存
             wafcdn_proxy_cache.time = 0
@@ -207,7 +208,17 @@ function WAFCDN_PROXY.header_filter()
     if ngx.ctx.wafcdn_proxy_cache.time > 0 then
         if util.contains(ngx.status, ngx.ctx.wafcdn_proxy_cache.status) then
             -- 创建缓存文件
-            local file, err = io.open(ngx.ctx.wafcdn_proxy_cache.path .. ".lock", "wb")
+            local file, err = nil,nil
+            local attr = lfs.attributes(ngx.ctx.wafcdn_proxy_cache.path .. ".lock")
+            if attr then -- 走到这里肯定是要缓存的-增加缓存锁与清理。
+                local cacheWait = ngx.time() - attr.modification
+                ngx.ctx.wafcdn_proxy_cache.xCache = "LOCK-" .. tostring(cacheWait)
+                if cacheWait > 3600 then -- 超过一个小时还在缓存的文件
+                    os.remove(ngx.ctx.wafcdn_proxy_cache.path .. ".lock")
+                end
+            else
+                file, err = io.open(ngx.ctx.wafcdn_proxy_cache.path .. ".lock", "wb")
+            end
             if not file then
                 if util.mkdir(string.match(ngx.ctx.wafcdn_proxy_cache.path, "(.*)/")) then
                     file, err = io.open(ngx.ctx.wafcdn_proxy_cache.path .. ".lock", "wb")
