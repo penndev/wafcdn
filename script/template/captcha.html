@@ -1,0 +1,181 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>拼图验证码</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: #fafafa;
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+
+        #captchaContainer {
+            display: inline-block;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #captchaImage {
+            position: relative;
+            margin: 0 auto 15px auto;
+            background-size: cover;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        #captchaPiece {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: move;
+            background-size: cover;
+        }
+
+        #captchaTip {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        #captchaText {
+            font-size: 14px;
+            color: #999;
+            margin: 10px 0;
+        }
+
+        #captchaSubmit {
+            font-size: 16px;
+            padding: 6px 20px;
+            border: none;
+            border-radius: 6px;
+            background: #007BFF;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #captchaSubmit:hover {
+            background: #0056b3;
+        }
+
+        hr {
+            margin: 30px auto;
+            width: 60%;
+        }
+
+        small {
+            color: #999;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>拼图验证码</h1>
+    <div id="captchaContainer">
+        <div id="captchaImage">
+            <div id="captchaPiece"></div>
+        </div>
+        <div id="captchaTip">拖动拼图到缺口完成验证</div>
+        <div id="captchaText">X: 0, Y: 0 <span style="color: red;">{{message}}</span></div>
+        <div>
+            <button id="captchaSubmit">提交验证</button>
+        </div>
+    </div>
+    <hr>
+    <small>Server: WAFCDN</small>
+
+    <script>
+        const container = document.getElementById("captchaContainer");
+        const captchaImage = container.querySelector("#captchaImage");
+        const captchaPiece = container.querySelector("#captchaPiece");
+        const captchaText = container.querySelector("#captchaText");
+
+        let dragging = false;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        let formX = 0
+        let formY = 0
+        let formId = "{{id}}"
+
+        function startDrag(e) {
+            dragging = true;
+            const point = e.touches ? e.touches[0] : e;
+            const rect = captchaPiece.getBoundingClientRect();
+            offsetX = point.clientX - rect.left;
+            offsetY = point.clientY - rect.top;
+        }
+
+        function moveDrag(e) {
+            if (!dragging) return;
+            const point = e.touches ? e.touches[0] : e;
+            const rect = captchaImage.getBoundingClientRect();
+
+            let x = point.clientX - rect.left - offsetX;
+            let y = point.clientY - rect.top - offsetY;
+
+            formX = x = Math.ceil(Math.max(0, Math.min(rect.width - captchaPiece.offsetWidth, x)));
+            formY = y = Math.ceil(Math.max(0, Math.min(rect.height - captchaPiece.offsetHeight, y)));
+
+            captchaPiece.style.left = x + "px";
+            captchaPiece.style.top = y + "px";
+
+            captchaText.textContent = `X: ${x}, Y: ${y}`;
+        }
+
+        function endDrag() {
+            dragging = false;
+        }
+
+        captchaPiece.addEventListener("mousedown", startDrag);
+        document.addEventListener("mousemove", moveDrag);
+        document.addEventListener("mouseup", endDrag);
+
+        captchaPiece.addEventListener("touchstart", startDrag, { passive: false });
+        document.addEventListener("touchmove", moveDrag, { passive: false });
+        document.addEventListener("touchend", endDrag);
+
+
+
+
+
+        captchaImage.style.backgroundImage = `url('{{imageBase64}}')`;
+        captchaImage.style.width = '{{imageWidth}}px';
+        captchaImage.style.height = '{{imageHeight}}px';
+
+        captchaPiece.style.backgroundImage = `url('{{pieceBase64}}')`;
+        captchaPiece.style.width = '{{pieceWidth}}px';
+        captchaPiece.style.height = '{{pieceHeight}}px';
+
+
+
+        
+        captchaSubmitButton = document.getElementById("captchaSubmit")
+        function captchaSubmit() {
+            captchaSubmitButton.disabled = true;
+            let form = document.createElement("form");
+            form.method = "POST";
+            [["id", formId], ["x", formX], ["y", formY]].forEach(([k, v]) => {
+                let i = document.createElement("input");
+                i.type = "hidden"; i.name = k; i.value = v;
+                form.appendChild(i);
+            });
+            document.body.appendChild(form);
+            form.submit();
+        }
+        captchaSubmitButton.onclick = captchaSubmit;
+
+    </script>
+</body>
+
+</html>

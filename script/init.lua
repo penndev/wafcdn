@@ -31,9 +31,27 @@ if wafcdn_api_timeout == nil then
     wafcdn_api_timeout = 30000
 end
 
+-- 启动时读取 HTML 模板
+local wafcdn_template_error = nil
+local errorfile = io.open("./script/template/error.html", "r")
+if errorfile then
+    wafcdn_template_error = errorfile:read("*a")
+    errorfile:close()
+end
+-- 启动时读取 HTML 模板
+local wafcdn_template_captcha = nil
+local captcha_file = io.open("./script/template/captcha.html", "r")
+if captcha_file then
+    wafcdn_template_captcha = captcha_file:read("*a")
+    captcha_file:close()
+end
+
+
 
 return {
     WAFCDN_API = wafcdn_api,
     WAFCDN_API_TIMEOUT = wafcdn_api_timeout,
-    WAFCDN_DATA_DIR = wafcdn_data_dir
+    WAFCDN_DATA_DIR = wafcdn_data_dir,
+    WAFCDN_TEMPLATE_ERROR = wafcdn_template_error,
+    WAFCDN_TEMPLATE_CAPTCHA = wafcdn_template_captcha
 }

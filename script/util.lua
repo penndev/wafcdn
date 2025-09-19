@@ -184,8 +184,11 @@ end
 -- @param message 信息
 -- @return void
 function util.status(status, message)
+    ngx.header["Content-Type"] = "text/html; charset=utf-8"
     ngx.status = status
-    ngx.say(tostring(status) .. (message or "nil"))
+    local html = init.WAFCDN_TEMPLATE_ERROR or "<h1>{{status}}</h1><small>{{message}}</small>"
+    html = html:gsub("{{status}}", tostring(status)):gsub("{{message}}", message)
+    ngx.say(html)
     ngx.exit(status)
 end
 

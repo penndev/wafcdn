@@ -2,6 +2,7 @@
 local limit_req = require("resty.limit.req")
 local ngx = require("ngx")
 local util = require("util")
+local init = require("init")
 
 local filter = {}
 
@@ -87,6 +88,103 @@ function filter.sign(method, key, expireArgs, signArgs)
     local base_secret = util.base64_url_encode(secret)
     if base_secret ~= args[signArgs] then
         return false, 'sign_fail' -- 签名验证失败
+    end
+    return true
+end
+
+-- 挑战验证
+-- @return allow bool 是否放行
+-- captcha<<<
+-- id
+-- imageBase64
+-- imageHeight
+-- imageWidth
+-- pieceBase64
+-- pieceHeight
+-- pieceWidth
+-- verifyX
+-- verifyY
+-- >>>
+function filter.captchaHtml(captcha)
+    local shareCaptcha = ngx.shared.wafcdn_captcha
+    shareCaptcha:set(captcha.id, captcha.verifyX*1000+captcha.verifyY, 60)   -- 保存数字
+
+    local html = init.WAFCDN_TEMPLATE_CAPTCHA
+    html = html:gsub("{{imageBase64}}", tostring(captcha.imageBase64)):gsub("{{imageHeight}}", captcha.imageHeight):gsub("{{imageWidth}}", captcha.imageWidth)
+    html = html:gsub("{{pieceBase64}}", tostring(captcha.pieceBase64)):gsub("{{pieceHeight}}", captcha.pieceHeight):gsub("{{pieceWidth}}", captcha.pieceWidth)
+    html = html:gsub("{{id}}", captcha.id):gsub("{{message}}", captcha.message)
+
+    ngx.header["Content-Type"] = "text/html; charset=utf-8"
+    ngx.status = 200
+    ngx.say(html)
+    ngx.exit(200)
+end
+
+-- wafcdn验证验证码
+-- @returns allow bool 是否放行
+-- @returns err string 错误描述
+function filter.captchaVerify()
+    if ngx.req.get_method() == "POST" then
+        ngx.req.read_body()
+        local args, err = ngx.req.get_post_args()
+        if err then
+            return err
+        end
+        if args["id"] == nil or args["x"] == nil or args["y"] == nil  then
+            return 'no_args' -- 参数不完整
+        end
+        local x = tonumber(args["x"])
+        local y = tonumber(args["y"])
+        if x == nil or y == nil then
+            return 'args_error' -- 参数错误
+        end
+
+        local shareCaptcha = ngx.shared.wafcdn_captcha
+        local pos = shareCaptcha:get(args["id"])
+        if not pos then
+            return 'not_found' -- 未找到验证码
+        end
+        shareCaptcha:delete(args["id"]) -- 删除验证码
+        local vx = math.floor(pos / 1000)
+        local vy = pos % 1000
+        if math.abs(vx - x) > 5 or math.abs(vy - y) > 5 then
+            return 'verify_fail' -- 验证失败
+        end
+        -- 设置cookie
+        local secret = util.hmac('sha256', "wafcdn", args["id"])
+        secret = args["id"] .. "." .. util.base64_url_encode(secret)
+        ngx.header["Set-Cookie"] = "X-WAFCDN-TOKEN="..secret.."; Path=/; HttpOnly; SameSite=Strict; Max-Age=36000"
+        ngx.redirect(ngx.var.request_uri, 302)
+        ngx.exit()
+        return true
+    end
+    return "" -- 不是POST请求则替换错误消息为空字符串，不能为nil
+end
+
+
+
+-- 验证是否存在token
+-- @return allow bool 是否放行
+function filter.captchaToken()
+    local cookie = ngx.var.http_cookie or ""
+    local token = cookie:match("X%-WAFCDN%-TOKEN=([^;]+)")
+    if not token then
+        return false
+    end
+    local id, sign = token:match("^([^.]+)%.([^.]+)$")
+    if not id or not sign then
+        return false
+    end
+    local secret = util.hmac('sha256', "wafcdn", id)
+    if util.base64_url_encode(secret) ~= sign then
+        return false
+    end
+    -- 删除 X-WAFCDN-TOKEN
+    local new_cookie = cookie:gsub("X%-WAFCDN%-TOKEN=[^;]*;?%s*", "")
+    if new_cookie == "" then
+        ngx.req.clear_header("Cookie")
+    else
+        ngx.req.set_header("Cookie", new_cookie)
     end
     return true
 end

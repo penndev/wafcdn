@@ -102,6 +102,23 @@ function WAFCDN.rewrite()
     ngx.var.wafcdn_site = res.body.site -- 站点ID
     ngx.var.wafcdn_header = util.json_encode(res.body.header)
 
+    -- 人机验证
+    local captchaStatus = res.body.security.captcha
+    if captchaStatus and not filter.captchaToken() then
+        --如果有提交验证码，并验证完成则会直接302重定向
+        --allow_err 是错误描述
+        local allow_err = filter.captchaVerify()
+        -- 如果验证通过永远不会走这里
+        local captcha, err = util.request("/@wafcdn/captcha", {})
+        if captcha == nil then
+            util.status(500, err)
+            return
+        end
+        captcha.body.message = allow_err
+        return filter.captchaHtml(captcha.body)
+    end
+
+
     -- -- -- -- -- -- -- -- --
     -- !IP黑名单处理
     -- !IP区域控制
