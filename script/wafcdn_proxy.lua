@@ -95,6 +95,9 @@ function WAFCDN_PROXY.ROUTE(proxy)
             end
             wafcdn_proxy_cache.time = 0
         end
+        if ngx.var.http_range then --范围请求不缓存
+            wafcdn_proxy_cache.time = 0
+        end
     else
         wafcdn_proxy_cache.xCache = "BYPASS"
     end
