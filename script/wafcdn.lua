@@ -3,6 +3,7 @@ local ssl = require("ngx.ssl")
 local util = require("util")
 local filter = require("filter")
 local proxy = require("wafcdn_proxy")
+local static = require("wafcdn_static")
 
 local WAFCDN = {}
 
@@ -215,11 +216,15 @@ function WAFCDN.ROUTE(body)
     -- 文件请求类型
     -- @type
     --  - proxy反向代理方式
-    --  - alisa静态文件访问 -待实现
+    --  - static 静态站点目录
+    --  - alias 缓存命中文件
     --  - fast_cgi  -待实现
     --  - tcp_proxy -待实现
     if body.type == "proxy" then
         proxy.ROUTE(body.proxy)
+        return
+    elseif body.type == "static" then
+        static.ROUTE(body.static)
         return
     else
         util.status(403, "INTERNAL_FAILED_SITE_TYPE")
