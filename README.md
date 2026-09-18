@@ -2,6 +2,20 @@
 
 > 基于openresty开发的服务器网关，融合waf和cdn的功能。
 
+## Docker 安装
+
+拉取后直接运行：
+
+```bash
+docker pull penndev/wafcdn:latest
+docker run -d --network host -e APP_SECRET=secret penndev/wafcdn:latest
+```
+
+- 管理端：http://ip:8000/-admin
+- 首次登录用户名填 `admin`，密码自己定；提示「已初始化管理员」后再用同一账号登录一次
+
+**高级部署与详情见 [Docker.md](./Docker.md)**
+
 ## WAF功能
 - 单连接限速
 - QPS限制
@@ -40,6 +54,10 @@
 
 > 使用golang编写的api来操作整体的wafcdn运行情况 
 
+- 管理端地址：`http://127.0.0.1:8000/-admin`（端口由 `APP_LISTEN` 控制，默认 `:8000`）
+- 首次初始化：用户名必须是 `admin`，密码自定义。第一次会提示「已初始化管理员」，再用同一账号登录即可。
+- `APP_SECRET` 只用于 JWT 签名，和登录密码无关。 
+
 - 域名配置 waf cdn的功能。
 - 缓存管理 预加载，清理。
 - 运行监控服务器的运行情况等功能。
@@ -72,7 +90,7 @@
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout private.key -out certificate.crt -config ssl.conf
     ```
 
-- 配置缓存目录 `conf/nginx.conf` 下的 `WAFCDN_DATA_DIR` 配置
+- 配置数据根目录：Go 环境变量 `WAFCDN_DATA_DIR`（缓存 `$WAFCDN_DATA_DIR/proxy`，静态站 `$WAFCDN_DATA_DIR/static`）
 
 ## openresty 说明
 

@@ -9,10 +9,10 @@ if not ok then
     error("failed to set working dir: " .. err)
 end
 
--- 放置缓存文件的目录
+-- 数据根目录：缓存 $WAFCDN_DATA_DIR/proxy，静态站 $WAFCDN_DATA_DIR/static
 local wafcdn_data_dir = os.getenv("WAFCDN_DATA_DIR")
-if wafcdn_data_dir == "" then
-    error("env WAFCDN_DATA_DIR not set")
+if wafcdn_data_dir == nil or wafcdn_data_dir == "" then
+    wafcdn_data_dir = "/data"
 end
 if lfs.attributes(wafcdn_data_dir, 'mode') ~= 'directory' then
     error("env WAFCDN_DATA_DIR (" .. wafcdn_data_dir .. ") not is directory type")

@@ -248,7 +248,7 @@ end
 function util.cache_path(method, uri)
     local cache_key = ngx.md5(method .. uri)
     local dir1, dir2 = string.sub(cache_key, 1, 2), string.sub(cache_key, 3, 4)
-    local cache_path = string.format("%s/%s/%s/%s/%s",
+    local cache_path = string.format("%s/proxy/%s/%s/%s/%s",
         init.WAFCDN_DATA_DIR,
         ngx.var.wafcdn_site,
         dir1,

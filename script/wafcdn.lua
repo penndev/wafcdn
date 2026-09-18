@@ -215,11 +215,28 @@ function WAFCDN.ROUTE(body)
     -- 文件请求类型
     -- @type
     --  - proxy反向代理方式
-    --  - alisa静态文件访问 -待实现
+    --  - static静态文件访问
     --  - fast_cgi  -待实现
     --  - tcp_proxy -待实现
     if body.type == "proxy" then
         proxy.ROUTE(body.proxy)
+        return
+    elseif body.type == "static" then
+        local root = body.static and body.static.root
+        if root == nil or root == "" then
+            util.status(403, "STATIC_ROOT_NOT_SET")
+            return
+        end
+        local uri = ngx.var.uri
+        if string.find(uri, "..", 1, true) then
+            util.status(403, "STATIC_PATH_INVALID")
+            return
+        end
+        if string.sub(uri, -1) == "/" then
+            uri = uri .. "index.html"
+        end
+        ngx.var.wafcdn_alias = util.json_encode({ file = root .. uri })
+        ngx.req.set_uri("/@alias", true)
         return
     else
         util.status(403, "INTERNAL_FAILED_SITE_TYPE")

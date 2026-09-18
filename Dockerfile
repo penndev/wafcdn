@@ -8,6 +8,7 @@ WORKDIR /app
 COPY ./dist /app/dist
 COPY ./wafcdn /app/wafcdn
 COPY ./script /app/script
+COPY ./ipregion.db /app/ipregion.db
 
 # OpenResty环境
 COPY ./conf /app/conf
@@ -15,6 +16,8 @@ COPY ./conf /app/conf
 # 初始化
 RUN mkdir logs
 RUN mkdir /data
+RUN mkdir /data/proxy
+RUN mkdir /data/static
 RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.key -out ./conf/certificate.crt -config ./conf/ssl.conf
 
 # 设置Env环境
@@ -28,6 +31,8 @@ ENV DB_URL=sqlite://sqlite.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(300
 ENV CACHE_URL=ttlmap://memory
 # ENV NGINX_BINARY=openresty
 # ENV NGINX_PREFIX=./
+ENV WAFCDN_DATA_DIR=/data
+ENV IPREGION_DB=/app/ipregion.db
 
 
 EXPOSE 80 443 8000
