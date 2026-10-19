@@ -132,7 +132,7 @@ function WAFCDN_PROXY.rewrite()
         return
     else
         -- 走 upstream
-        local protocol, ip, port = string.match(proxy.server, "^(%w+)://([^:/]+):?(%d*)$")
+        local protocol, ip, port, originPath = string.match(proxy.server, "^(%w+)://([^:/]+):?(%d*)(.*)$")
         if protocol == "http" then
             ngx.var.wafcdn_proxy_server = "http://wafcdn_proxy_backend"
         elseif protocol == "https" then -- 回源协议是否是https
@@ -140,6 +140,13 @@ function WAFCDN_PROXY.rewrite()
         else
             util.status(426, "proxy error")
             return
+        end
+        if originPath ~= nil and originPath ~= "" and originPath ~= "/" then
+            originPath = string.gsub(originPath, "/+$", "")
+            if string.sub(originPath, 1, 1) ~= "/" then
+                originPath = "/" .. originPath
+            end
+            ngx.req.set_uri(originPath .. ngx.var.uri, false)
         end
         -- 设置反向代理连接池
         ngx.ctx.wafcdn_proxy_upstream = {

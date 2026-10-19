@@ -224,6 +224,27 @@ function WAFCDN.ROUTE(body)
         proxy.ROUTE(body.proxy)
         return
     elseif body.type == "static" then
+        local matched = nil
+        local matchedLen = 0
+        local locations = body.static and body.static.locations
+        if type(locations) == "table" then
+            local uri = ngx.var.uri
+            for _, loc in ipairs(locations) do
+                local path = loc.path
+                if type(path) == "string" and path ~= "" and path ~= "/" and loc.proxy ~= nil then
+                    if uri == path or string.sub(uri, 1, #path + 1) == path .. "/" then
+                        if #path > matchedLen then
+                            matched = loc
+                            matchedLen = #path
+                        end
+                    end
+                end
+            end
+        end
+        if matched ~= nil then
+            proxy.ROUTE(matched.proxy)
+            return
+        end
         static.ROUTE(body.static)
         return
     else

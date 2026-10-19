@@ -16,6 +16,7 @@
 ## DIR
 
 - /data 数据存储目录
+  - /data/sqlite.db 默认 SQLite 数据库（`DB_URL` 未覆盖时）
   - /data/proxy 反向代理缓存目录（后缀固定）
   - /data/static 静态站点文件目录（后缀固定）
 - /app/logs 运行日志
@@ -34,7 +35,7 @@ docker run -d --network host -e APP_SECRET=secret penndev/wafcdn:latest
 
 - 小并发单机部署命令
 ```bash
-docker run -e DB_URL=sqlite://sqlite.db -e CACHE_URL=ttlmap://memory -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
+docker run -e DB_URL=sqlite:///data/sqlite.db -e CACHE_URL=ttlmap://memory -d -p 80:80 -p 443:443 -p 8000:8000 -e APP_SECRET=secret penndev/wafcdn:latest
 ```
 
 - 高并发运行
