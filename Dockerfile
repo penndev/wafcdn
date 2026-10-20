@@ -18,7 +18,7 @@ RUN apk upgrade --no-cache \
  && apk add --no-cache openssl \
  && mkdir -p logs /data/proxy /data/static \
  && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.key -out ./conf/certificate.crt -config ./conf/ssl.conf \
- && apk del openssl
+ && apk del openssl libxslt libxml2
 
 # 设置Env环境
 # ENV APP_MODE=prod
