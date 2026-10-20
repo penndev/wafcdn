@@ -117,6 +117,13 @@ function WAFCDN_PROXY.rewrite()
     end
 
     ngx.req.set_uri(string.sub(ngx.var.uri, 8), false) -- string.len("/@proxy") + 1
+    local cookie = ngx.var.http_cookie or ""
+    local new_cookie = cookie:gsub("X%-WAFCDN%-TOKEN=[^;]*;?%s*", "")
+    if new_cookie == "" then
+        ngx.req.clear_header("Cookie")
+    else
+        ngx.req.set_header("Cookie", new_cookie)
+    end
     local proxy, _ = util.json_decode(ngx.var.wafcdn_proxy)
     if proxy == nil then
         util.status(500, "INTERNAL_PROXY_JSON_FAIL")
@@ -141,12 +148,30 @@ function WAFCDN_PROXY.rewrite()
             util.status(426, "proxy error")
             return
         end
-        if originPath ~= nil and originPath ~= "" and originPath ~= "/" then
+        if originPath ~= nil and originPath ~= "" then
             originPath = string.gsub(originPath, "/+$", "")
-            if string.sub(originPath, 1, 1) ~= "/" then
-                originPath = "/" .. originPath
+            if originPath == "" then
+                originPath = "/"
             end
-            ngx.req.set_uri(originPath .. ngx.var.uri, false)
+            local uri = ngx.var.uri
+            local loc = proxy.location
+            if type(loc) == "string" and loc ~= "" and loc ~= "/" then
+                if uri == loc then
+                    uri = ""
+                elseif string.sub(uri, 1, #loc + 1) == loc .. "/" then
+                    uri = string.sub(uri, #loc + 1)
+                end
+            end
+            if originPath == "/" then
+                if uri == "" then
+                    uri = "/"
+                end
+                ngx.req.set_uri(uri, false)
+            elseif uri == "" then
+                ngx.req.set_uri(originPath, false)
+            else
+                ngx.req.set_uri(originPath .. uri, false)
+            end
         end
         -- 设置反向代理连接池
         ngx.ctx.wafcdn_proxy_upstream = {

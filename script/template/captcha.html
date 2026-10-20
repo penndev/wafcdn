@@ -1,104 +1,118 @@
 <!doctype html>
-<html>
-
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>拼图验证码</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Security check</title>
+    <script>
+        var primary = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+        var zh = String(primary).toLowerCase().indexOf("zh") === 0;
+        document.documentElement.lang = zh ? "zh" : "en";
+        document.title = zh ? "人机验证" : "Security check";
+    </script>
     <style>
+        * { box-sizing: border-box; }
+        html:not([lang="zh"]) [lang="zh"] { display: none; }
+        html[lang="zh"] [lang="en"] { display: none; }
         body {
-            font-family: Arial, Helvetica, sans-serif;
-            text-align: center;
-            padding: 50px;
-            background: #fafafa;
-        }
-
-        h1 {
-            font-size: 36px;
-            margin-bottom: 20px;
-        }
-
-        #captchaContainer {
-            display: inline-block;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
             background: #fff;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            color: #111;
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
         }
-
+        #captchaContainer {
+            width: max-content;
+            max-width: 100%;
+        }
+        h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+        }
+        #captchaTip {
+            margin: 6px 0 14px;
+            font-size: 14px;
+            color: #555;
+        }
         #captchaImage {
             position: relative;
-            margin: 0 auto 15px auto;
+            margin: 0 auto;
+            overflow: hidden;
+            background-color: #f2f2f2;
             background-size: cover;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+            border: 1px solid #d8d8d8;
+            user-select: none;
         }
-
         #captchaPiece {
             position: absolute;
             top: 0;
             left: 0;
-            cursor: move;
             background-size: cover;
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
         }
-
-        #captchaTip {
-            font-size: 16px;
-            color: #666;
-            margin-bottom: 8px;
+        #captchaPiece:active { cursor: grabbing; }
+        #captchaMessage {
+            margin: 10px 0 0;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #b42318;
         }
-
-        #captchaText {
-            font-size: 14px;
-            color: #999;
-            margin: 10px 0;
-        }
-
+        #captchaMessage:empty { display: none; }
         #captchaSubmit {
-            font-size: 16px;
-            padding: 6px 20px;
-            border: none;
-            border-radius: 6px;
-            background: #007BFF;
+            display: block;
+            width: 100%;
+            height: 40px;
+            margin-top: 14px;
+            border: 0;
+            background: #111;
             color: #fff;
+            font-size: 14px;
             cursor: pointer;
         }
-
-        #captchaSubmit:hover {
-            background: #0056b3;
-        }
-
-        hr {
-            margin: 30px auto;
-            width: 60%;
-        }
-
+        #captchaSubmit:hover { background: #000; }
+        #captchaSubmit:disabled { opacity: 0.45; cursor: default; }
         small {
-            color: #999;
+            margin-top: 18px;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            color: #8a8a8a;
         }
     </style>
 </head>
-
 <body>
-    <h1>拼图验证码</h1>
     <div id="captchaContainer">
+        <h1>
+            <span lang="en">Security check</span>
+            <span lang="zh">人机验证</span>
+        </h1>
+        <div id="captchaTip">
+            <span lang="en">Drag the piece into the gap.</span>
+            <span lang="zh">把拼图拖到缺口处。</span>
+        </div>
         <div id="captchaImage">
             <div id="captchaPiece"></div>
         </div>
-        <div id="captchaTip">拖动拼图到缺口完成验证</div>
-        <div id="captchaText">X: 0, Y: 0 <span style="color: red;">{{message}}</span></div>
-        <div>
-            <button id="captchaSubmit">提交验证</button>
-        </div>
+        <div id="captchaMessage">{{message}}</div>
+        <button id="captchaSubmit" type="button">
+            <span lang="en">Continue</span>
+            <span lang="zh">提交验证</span>
+        </button>
     </div>
-    <hr>
-    <small>Server: WAFCDN</small>
+    <small>WAFCDN</small>
 
     <script>
         const container = document.getElementById("captchaContainer");
         const captchaImage = container.querySelector("#captchaImage");
         const captchaPiece = container.querySelector("#captchaPiece");
-        const captchaText = container.querySelector("#captchaText");
 
         let dragging = false;
         let offsetX = 0;
@@ -129,8 +143,6 @@
 
             captchaPiece.style.left = x + "px";
             captchaPiece.style.top = y + "px";
-
-            captchaText.textContent = `X: ${x}, Y: ${y}`;
         }
 
         function endDrag() {
@@ -145,10 +157,6 @@
         document.addEventListener("touchmove", moveDrag, { passive: false });
         document.addEventListener("touchend", endDrag);
 
-
-
-
-
         captchaImage.style.backgroundImage = `url('{{imageBase64}}')`;
         captchaImage.style.width = '{{imageWidth}}px';
         captchaImage.style.height = '{{imageHeight}}px';
@@ -157,9 +165,6 @@
         captchaPiece.style.width = '{{pieceWidth}}px';
         captchaPiece.style.height = '{{pieceHeight}}px';
 
-
-
-        
         captchaSubmitButton = document.getElementById("captchaSubmit")
         function captchaSubmit() {
             captchaSubmitButton.disabled = true;
@@ -174,8 +179,6 @@
             form.submit();
         }
         captchaSubmitButton.onclick = captchaSubmit;
-
     </script>
 </body>
-
 </html>

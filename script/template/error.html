@@ -1,20 +1,75 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>{{status}}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTTP {{status}}</title>
+  <script>
+    var primary = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+    document.documentElement.lang = String(primary).toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
+  </script>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; text-align: center; padding: 50px; }
-    h1 { font-size: 48px; margin-bottom: 10px; }
-    p  { font-size: 20px; color: #666; }
-    hr { margin: 30px auto; width: 60%; }
-    small { color: #999; }
+    * { box-sizing: border-box; }
+    html:not([lang="zh"]) [lang="zh"] { display: none; }
+    html[lang="zh"] [lang="en"] { display: none; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px;
+      background: #fff;
+      color: #111;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(520px, 100%);
+    }
+    .status {
+      margin: 0;
+      font-size: 72px;
+      font-weight: 600;
+      letter-spacing: -0.05em;
+      line-height: 0.9;
+    }
+    .bar {
+      width: 36px;
+      height: 3px;
+      margin: 18px 0 16px;
+      background: #111;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    p {
+      margin: 10px 0 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #444;
+      word-break: break-word;
+    }
+    small {
+      display: block;
+      margin-top: 28px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: #8a8a8a;
+    }
   </style>
 </head>
 <body>
-  <h1>HTTP {{status}}</h1>
-  <p>{{message}}</p>
-  <hr>
-  <small>Server: WAFCDN</small>
+  <main>
+    <p class="status">{{status}}</p>
+    <div class="bar"></div>
+    <h1>
+      <span lang="en">Request not completed</span>
+      <span lang="zh">请求没有完成</span>
+    </h1>
+    <p>{{message}}</p>
+    <small>WAFCDN</small>
+  </main>
 </body>
 </html>

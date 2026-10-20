@@ -103,23 +103,6 @@ function WAFCDN.rewrite()
     ngx.var.wafcdn_site = res.body.site -- 站点ID
     ngx.var.wafcdn_header = util.json_encode(res.body.header)
 
-    -- 人机验证
-    local captchaStatus = res.body.security.captcha
-    if captchaStatus and not filter.captchaToken() then
-        --如果有提交验证码，并验证完成则会直接302重定向
-        --allow_err 是错误描述
-        local allow_err = filter.captchaVerify()
-        -- 如果验证通过永远不会走这里
-        local captcha, err = util.request("/@wafcdn/captcha", {})
-        if captcha == nil then
-            util.status(500, err)
-            return
-        end
-        captcha.body.message = allow_err
-        return filter.captchaHtml(captcha.body)
-    end
-
-
     -- -- -- -- -- -- -- -- --
     -- !IP黑名单处理
     -- !IP区域控制
@@ -188,6 +171,22 @@ function WAFCDN.rewrite()
         end
     end
 
+    -- 人机验证放在安全防护最后
+    local captchaStatus = res.body.security.captcha
+    if captchaStatus and not filter.captchaToken() then
+        --如果有提交验证码，并验证完成则会直接302重定向
+        --allow_err 是错误描述
+        local allow_err = filter.captchaVerify()
+        -- 如果验证通过永远不会走这里
+        local captcha, err = util.request("/@wafcdn/captcha", {})
+        if captcha == nil then
+            util.status(500, err)
+            return
+        end
+        captcha.body.message = allow_err
+        return filter.captchaHtml(captcha.body)
+    end
+
     -- http请求强制https
     if res.body.sslForce == true and ngx.var.https == "" then
         ngx.redirect("https://" .. host .. ngx.var.request_uri, 301)
@@ -213,44 +212,36 @@ function WAFCDN.ROUTE(body)
     end
 
 
-    -- 文件请求类型
-    -- @type
-    --  - proxy反向代理方式
-    --  - static 静态站点目录
-    --  - alias 缓存命中文件
-    --  - fast_cgi  -待实现
-    --  - tcp_proxy -待实现
-    if body.type == "proxy" then
-        proxy.ROUTE(body.proxy)
-        return
-    elseif body.type == "static" then
-        local matched = nil
-        local matchedLen = 0
-        local locations = body.static and body.static.locations
-        if type(locations) == "table" then
-            local uri = ngx.var.uri
-            for _, loc in ipairs(locations) do
-                local path = loc.path
-                if type(path) == "string" and path ~= "" and path ~= "/" and loc.proxy ~= nil then
-                    if uri == path or string.sub(uri, 1, #path + 1) == path .. "/" then
-                        if #path > matchedLen then
-                            matched = loc
-                            matchedLen = #path
-                        end
-                    end
+    local matched = nil
+    local matchedLen = 0
+    local locations = body.locations
+    if type(locations) == "table" then
+        local uri = ngx.var.uri
+        for _, loc in ipairs(locations) do
+            local path = loc.path
+            if type(path) == "string" and path ~= "" then
+                local hit = path == "/" or uri == path or string.sub(uri, 1, #path + 1) == path .. "/"
+                if hit and #path > matchedLen then
+                    matched = loc
+                    matchedLen = #path
                 end
             end
         end
-        if matched ~= nil then
-            proxy.ROUTE(matched.proxy)
-            return
-        end
-        static.ROUTE(body.static)
-        return
-    else
-        util.status(403, "INTERNAL_FAILED_SITE_TYPE")
+    end
+    if matched ~= nil and matched.action == "proxy" and matched.proxy ~= nil then
+        matched.proxy.location = matched.path
+        proxy.ROUTE(matched.proxy)
         return
     end
+    if matched ~= nil and matched.action == "redirect" and type(matched.redirect) == "string" and matched.redirect ~= "" then
+        local code = tonumber(matched.code) or 302
+        if code ~= 301 then
+            code = 302
+        end
+        ngx.redirect(matched.redirect, code)
+        return
+    end
+    static.ROUTE({ root = body.root })
 end
 
 function WAFCDN.header_filter()

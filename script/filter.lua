@@ -115,6 +115,7 @@ function filter.captchaHtml(captcha)
     html = html:gsub("{{id}}", captcha.id):gsub("{{message}}", captcha.message)
 
     ngx.header["Content-Type"] = "text/html; charset=utf-8"
+    ngx.header["Cache-Control"] = "no-store"
     ngx.status = 200
     ngx.say(html)
     ngx.exit(200)
@@ -178,13 +179,6 @@ function filter.captchaToken()
     local secret = util.hmac('sha256', "wafcdn", id)
     if util.base64_url_encode(secret) ~= sign then
         return false
-    end
-    -- 删除 X-WAFCDN-TOKEN
-    local new_cookie = cookie:gsub("X%-WAFCDN%-TOKEN=[^;]*;?%s*", "")
-    if new_cookie == "" then
-        ngx.req.clear_header("Cookie")
-    else
-        ngx.req.set_header("Cookie", new_cookie)
     end
     return true
 end
