@@ -1,4 +1,4 @@
-FROM openresty/openresty
+FROM openresty/openresty:1.31.1.1-alpine
 
 ENV TZ=Asia/Shanghai
 
@@ -13,12 +13,12 @@ COPY ./ipregion.db /app/ipregion.db
 # OpenResty环境
 COPY ./conf /app/conf
 
-# 初始化
-RUN mkdir logs
-RUN mkdir /data
-RUN mkdir /data/proxy
-RUN mkdir /data/static
-RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.key -out ./conf/certificate.crt -config ./conf/ssl.conf
+# 初始化。apk upgrade 吃掉基础镜像里已经有补丁的系统包。
+RUN apk upgrade --no-cache \
+ && apk add --no-cache openssl \
+ && mkdir -p logs /data/proxy /data/static \
+ && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ./conf/private.key -out ./conf/certificate.crt -config ./conf/ssl.conf \
+ && apk del openssl
 
 # 设置Env环境
 # ENV APP_MODE=prod

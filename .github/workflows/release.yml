@@ -40,7 +40,7 @@ jobs:
         with:
           go-version: stable
       - name: Build
-        run: go build -o wafcdn ./cmd/wafcdn/main.go
+        run: CGO_ENABLED=0 go build -o wafcdn ./cmd/wafcdn/main.go
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -48,18 +48,13 @@ jobs:
           path: ./wafcdn # 部署编译后的文件
   script:
     runs-on: ubuntu-latest
-    container:
-      image: openresty/openresty
     steps:
       - name: Git Checkout
         uses: actions/checkout@v4
       - name: Build
         run: |
-          /usr/local/openresty/luajit/bin/luajit -v
-          for file in ./script/*.lua
-          do
-            /usr/local/openresty/luajit/bin/luajit -b "$file" "$file"
-          done
+          docker run --rm -v "$PWD:/work" -w /work openresty/openresty:1.31.1.1-alpine \
+            sh -c '/usr/local/openresty/luajit/bin/luajit -v; for file in ./script/*.lua; do /usr/local/openresty/luajit/bin/luajit -b "$file" "$file"; done'
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
